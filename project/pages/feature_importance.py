@@ -113,6 +113,10 @@ def plot_feature_bubbles_for_id(
     k = 12.0 / np.sqrt(probs.max() + 1e-12)
     base_radii = (k * np.sqrt(adj)) * radius_scale  # scale_factor=1일 때의 반지름
 
+    # 중앙(최대) 원 강조
+    center_boost = 1.15   # ← 1.0~1.25 사이로 취향껏
+    base_radii[0] *= center_boost
+
     # --- 4) 좌표 배치: 중앙(0,0), 나머지 링에 균등 ---
     cx, cy = [0.0], [0.0]
     if n > 1:
@@ -238,7 +242,7 @@ def plot_feature_bubbles_for_id(
         _apply_title(fig, _title, fontprop=fontprop, size=24, weight="bold")
 
         # 여백
-        pad = (base_radii.max() if len(base_radii) else 1.0) * 2.2
+        pad = (base_radii.max() if len(base_radii) else 1.0) * 1.25
         ax.set_xlim(min(cx) - pad, max(cx) + pad)
         ax.set_ylim(min(cy) - pad, max(cy) + pad)
         return fig, ax
@@ -274,16 +278,16 @@ df = pd.read_csv(DATA_PATH)
 # -----------------------------
 # 3) 특정 ID로 그리기
 # -----------------------------
-id_value = "0x8b39"
+id_value = "0x9d32"
 ph = st.empty()
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
-    figsize=(14, 12),        # 캔버스 넓게
-    ring_scale=1.1,         # 주변 원을 중앙에 바짝
-    radius_scale=7.0,        # 원 자체를 크게
-    gap_ratio=-0.20,         # 일부러 겹치도록(음수면 살짝 겹침 허용)
-    gap_abs=-0.10,
+    figsize=(12, 10),        # 캔버스 넓게
+    ring_scale=1.08,         # 주변 원을 중앙에 바짝
+    radius_scale=8.0,        # 원 자체를 크게
+    gap_ratio=-0.05,         # 일부러 겹치도록(음수면 살짝 겹침 허용)
+    gap_abs=0.0,
     area_gamma=1.6,
     text_fontsize=18,        # 라벨도 큼직하게
     animate=True, frames=5, frame_delay=0.012,  # 더 빠른 애니메이션
