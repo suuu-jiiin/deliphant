@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
     
-from utils.paths import DATA_PATH, FONT_PATH
+from utils.paths import DATA_PATH, FONT_PATH, PREPROCESSED_PATH
 
 # 한국어 폰트 
 def use_korean_font(font_path):
@@ -34,7 +34,66 @@ def use_korean_font(font_path):
 myfont = use_korean_font(FONT_PATH)
 
 # -----------------------------
-# 1) 플랏
+# 1) 데이터 로드
+# -----------------------------
+meta_df = pd.read_csv(PREPROCESSED_PATH)
+df = pd.read_csv(DATA_PATH)  
+
+# -----------------------------
+# 2) 실제 데이터 값
+# -----------------------------
+# 한국어 매핑
+def map_weather(v):
+    s = str(v).strip().lower()
+    m = {
+        "sunny":"맑음", "cloudy":"흐림", "fog":"안개", "sandstorms":"황사",
+        "windy":"바람", "stormy":"폭풍"
+    }
+    return m.get(s, str(v))
+
+def map_traffic(v):
+    s = str(v).strip().lower()
+    m = {"jam":"정체", "high":"혼잡", "medium":"서행", "low":"원활"}
+    return m.get(s, str(v))
+
+def map_multi(v):
+    s = str(v).strip().lower()
+    if s in {"1.0", "2.0", "3.0"}:  return "동시 배달"
+    if s in {"0.0"}:  return "한 집 배달"
+    return str(v)  # 숫자 2,3 등 특수 케이스 그대로
+
+def build_subtitle(meta_df: pd.DataFrame, id_value: str, id_col="ID") -> str:
+    row = meta_df.loc[meta_df[id_col].astype(str).str.strip()==str(id_value).strip()]
+    if row.empty:
+        return ""  # 못 찾으면 빈 자막
+    r = row.iloc[0]
+
+    # 컬럼 이름 대소문자/언더스코어 유연 매칭
+    def pick(colname):
+        cols = {c.lower().replace(" ","_"): c for c in meta_df.columns}
+        key = colname.lower().replace(" ","_")
+        if key in cols: 
+            return r[cols[key]]
+        return None
+
+    dist   = pick("distance_km")
+    weath  = pick("Weatherconditions")
+    city   = pick("region_city")
+    multi  = pick("multiple_deliveries")
+    traf   = pick("Road_traffic_density")
+
+    # 포맷팅
+    dist_txt  = f"{float(dist):.1f} km" if pd.notna(dist) else "NA"
+    weath_txt = map_weather(weath) if weath is not None else "NA"
+    traf_txt  = map_traffic(traf) if traf is not None else "NA"
+    multi_txt = map_multi(multi)  if multi is not None else "NA"
+    city_txt  = str(city) if city is not None else "NA"
+
+    # 표시 문자열 (구분자는 요구한 대로 ' / ')
+    return f"교통 상황: {traf_txt} / 날씨: {weath_txt} / 거리: {dist_txt} / 배달 수: {multi_txt} / 지역: {city_txt}"
+
+# -----------------------------
+# 3) 플랏
 # -----------------------------
 def plot_feature_bubbles_for_id(
     df: pd.DataFrame,
@@ -45,6 +104,7 @@ def plot_feature_bubbles_for_id(
     title: str | None = None,
     figsize=(12, 10),
     area_gamma: float = 1.0,
+    subtitle: str | None = None,
 
     # === 스타일 파라미터 (조금 키움) ===
     ring_scale: float = 1.45,    # 중앙 원 대비 바깥 링 반지름 배율
@@ -229,20 +289,28 @@ def plot_feature_bubbles_for_id(
             ax.text(cx[0], cy[0], txt0, ha="center", va="center",
                     fontsize=text_fontsize+2, fontweight="bold", color="#111", zorder=7)
 
-        # 제목
+        # ---- 제목 ----
         def _apply_title(fig, text, fontprop=None, size=24, weight="bold"):
-            fig.subplots_adjust(top=0.86)
+            fig.subplots_adjust(top=0.78)
             if fontprop is not None:
                 fp = fontprop.copy(); fp.set_size(size); fp.set_weight(weight)
-                fig.suptitle(text, x=0.5, y=0.98, fontproperties=fp)
+                fig.suptitle(text, x=0.5, y=0.95, fontproperties=fp)
             else:
-                fig.suptitle(text, x=0.5, y=0.98, fontsize=size, fontweight=weight)
+                fig.suptitle(text, x=0.5, y=0.95, fontsize=size, fontweight=weight)
 
         _title = title if title is not None else f"ID ({id_value})의 변수 중요도"
         _apply_title(fig, _title, fontprop=fontprop, size=24, weight="bold")
 
+        # ---- 자막(실제 입력값) ----
+        if subtitle:
+            if fontprop is not None:
+                fp2 = fontprop.copy(); fp2.set_size(14)
+                fig.text(0.5, 0.85, subtitle, ha="center", va="center", fontproperties=fp2, color="#333")
+            else:
+                fig.text(0.5, 0.85, subtitle, ha="center", va="center", fontsize=14, color="#333")
+
         # 여백
-        pad = (base_radii.max() if len(base_radii) else 1.0) * 1.25
+        pad = (base_radii.max() if len(base_radii) else 1.0) 
         ax.set_xlim(min(cx) - pad, max(cx) + pad)
         ax.set_ylim(min(cy) - pad, max(cy) + pad)
         return fig, ax
@@ -270,15 +338,13 @@ def plot_feature_bubbles_for_id(
         fig, ax = draw_frame(1.0)
         return fig, ax
 
-# -----------------------------
-# 2) 데이터 로드
-# -----------------------------
-df = pd.read_csv(DATA_PATH)  
 
 # -----------------------------
-# 3) 특정 ID로 그리기
+# 4) 특정 ID로 그리기
 # -----------------------------
 id_value = "0x9d32"
+subtitle = build_subtitle(meta_df, id_value)
+
 ph = st.empty()
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
@@ -291,5 +357,6 @@ fig, _ = plot_feature_bubbles_for_id(
     area_gamma=1.6,
     text_fontsize=18,        # 라벨도 큼직하게
     animate=True, frames=5, frame_delay=0.012,  # 더 빠른 애니메이션
-    st_placeholder=ph
+    st_placeholder=ph,
+    subtitle=subtitle  
 )
