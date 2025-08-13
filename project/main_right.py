@@ -119,6 +119,8 @@ with right_col:
                 st.markdown("""
                 <style>
                 .stButton button {
+                    white-space: nowrap;           /* 줄바꿈 금지 */
+                    word-break: keep-all;          /* 한글도 단어 단위로 */
                     background-color: #f0f2f6;
                     color: #000000;
                     border-radius: 20px;
@@ -126,13 +128,14 @@ with right_col:
                     padding: 10px 20px;
                     font-size: 16px;
                     font-weight: bold;
-                    width: 100%;
+                    width: 100%; max-width: 320px; /* 충분한 폭 고정 */
+                    display: block; margin: 6px auto; /* 가운데 정렬 */
                 }
                 </style>
                 """, unsafe_allow_html=True)
 
-                col1, col2, col3 = st.columns([0.5, 1, 1.5])
-                with col2:
+                c1, c2, c3 = st.columns([1,2,1])
+                with c2:
                     # ✅ key를 고유하게: 선택된 ID를 붙이면 충돌 없음
                     if st.button("상세 보기", use_container_width=True, key=f"detail_btn_{selected_id}"):
                         st.switch_page("pages/feature_importance.py")
