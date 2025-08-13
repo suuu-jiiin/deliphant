@@ -12,13 +12,14 @@ with mid_col:
             4.0: "40~44분", 4.5: "45~49분", 5.0: "50~54분"
         }
 
-        # Time_pred_class 컬럼이 있는지, 값이 유효한지 확인
-        if 'Time_pred_class' in orders.columns and pd.notna(target_row['Time_pred_class']):
-            pred_class = target_row['Time_pred_class']
-            # time_map에서 예측 클래스에 해당하는 시간 범위 문자열을 가져옴
-            time_range_str = time_map.get(pred_class, "계산 불가")
-        else:
-            time_range_str = "정보 없음"
+        pred_class = None
+        if 'max_after_class_key' in target_row and pd.notna(target_row['max_after_class_key']):
+            try:
+                # str 타입이므로 float으로 변환
+                pred_class = float(target_row['max_after_class_key'])
+            except (ValueError, TypeError):
+                # 변환 실패 시 None
+                pass
         
         # 클래스를 실제 더할 시간(분)으로 매핑 (범위의 최소값 사용)
         minute_map = {
@@ -26,8 +27,7 @@ with mid_col:
         }
 
         # 1-1. 예상 소요 시간 (예: "10~14분")
-        if 'Time_pred_class' in orders.columns and pd.notna(target_row['Time_pred_class']):
-            pred_class = target_row['Time_pred_class']
+        if pred_class is not None:
             time_range_str = time_map.get(pred_class, "계산 불가")
         else:
             time_range_str = "정보 없음"
@@ -35,18 +35,17 @@ with mid_col:
         # 1-2. 예상 도착 시각 (예: "오후 10시 33분 도착 예정") 또는 에러 메시지
         arrival_text = ""
         error_text = ""
-        if 'Time_pred_class' in orders.columns and COL["pickup_time"] in orders.columns:
+        if pred_class is not None and COL["pickup_time"] in orders.columns:
             pickup_time_dt = parse_datetime(target_row.get(COL["date"]), target_row.get(COL["pickup_time"]))
 
             if pickup_time_dt:
-                pred_class = target_row['Time_pred_class']
                 minutes_to_add = minute_map.get(pred_class, 0)
                 estimated_arrival_time = pickup_time_dt + timedelta(minutes=minutes_to_add)
-                arrival_text = f"{fmt_kor(estimated_arrival_time)} 도착 예정"
+                arrival_text = f"{fmt_kor(estimated_arrival_time)} 전 도착 예정"
             else:
                 error_text = "픽업 시간이 없어 도착 예정 시간을 계산할 수 없습니다."
         else:
-            error_text = "예측에 필요한 컬럼이 없습니다."
+            error_text = "예측에 필요한 컬럼이 없거나 데이터가 유효하지 않습니다."
 
 
         # 1-3. 준비된 변수들을 사용하여 하나의 HTML 블록으로 모든 정보를 한 번에 출력합니다.
@@ -58,7 +57,7 @@ with mid_col:
 
         html_code = f"""
         <div style="line-height: 1.0;">
-            <h3 style='text-align: left; font-weight: bold; margin-bottom: -20px;'>배달 예상 시간</h3>
+            <h3 style='text-align: left; font-weight: bold; margin-bottom: -20px;'>배달 예상 소요 시간</h3>
             <h1 style='text-align: left; color: #1E90FF; margin-top: -20px;'>{time_range_str}</h1>
             {third_line_html}
         </div>
@@ -117,6 +116,7 @@ with mid_col:
                 "value": round(float(val) * 100, 1)  # %로 변환
             })
 
+        # 3. chart_data에 유효한 데이터가 하나라도 있으면 차트를 출력합니다.
         if chart_data:
             import altair as alt
             chart_df = pd.DataFrame(chart_data).dropna()
@@ -188,5 +188,27 @@ with mid_col:
             chart_comp = alt.hconcat(left_labels, middle, right_values).resolve_scale(y='shared')
 
             st.altair_chart(chart_comp, use_container_width=True)
+
+            # 상세보기 버튼
+            st.session_state['selected_id'] = selected_id
+            st.markdown("""
+            <style>
+            .stButton button {
+                background-color: #f0f2f6;
+                color: #000000;
+                border-radius: 20px;
+                border: 1px solid #dcdcdc;
+                padding: 10px 20px;
+                font-size: 16px;
+                font-weight: bold;
+                width: 100%;
+            }
+            </style>
+            """, unsafe_allow_html=True)
+
+            col1, col2, col3 = st.columns([1, 1, 1])
+            with col2:
+                if st.button("상세 보기", use_container_width=True):
+                    st.switch_page("pages/prob_distribution.py")
         else:
             st.warning("차트를 표시할 예측 확률 데이터가 없습니다.")
