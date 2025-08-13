@@ -1,12 +1,19 @@
 import streamlit as st
+import re 
 import time
+import base64
 import pandas as pd
 import numpy as np
 import matplotlib as mpl
+from pathlib import Path
 import matplotlib.pyplot as plt
+from functools import lru_cache
+import matplotlib.image as mpimg
 import matplotlib.font_manager as fm
+from matplotlib import patheffects as pe
 from matplotlib.font_manager import FontProperties
 from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import sys
 from pathlib import Path
 
@@ -16,7 +23,9 @@ if str(ROOT) not in sys.path:
     
 from utils.paths import DATA_PATH, FONT_PATH, PREPROCESSED_PATH
 
-# 한국어 폰트 
+# -----------------------------
+# 0) 폰트
+# -----------------------------
 def use_korean_font(font_path):
     """로컬 TTF 등록 후 전역 기본 폰트 설정 + FontProperties 반환"""
     fm.fontManager.addfont(str(font_path))
@@ -33,11 +42,30 @@ def use_korean_font(font_path):
 
 myfont = use_korean_font(FONT_PATH)
 
+def inject_webfont(ttf_path: Path, css_family: str, weight: int = 400):
+    """로컬 TTF를 base64로 임베드하고 css_family 이름으로 등록"""
+    if not ttf_path or not Path(ttf_path).exists():
+        return
+    b64 = base64.b64encode(Path(ttf_path).read_bytes()).decode("utf-8")
+    st.markdown(f"""
+    <style>
+      @font-face {{
+        font-family: '{css_family}';
+        src: url(data:font/ttf;base64,{b64}) format('truetype');
+        font-weight: {weight};
+        font-style: normal;
+        font-display: swap;
+      }}
+    </style>
+    """, unsafe_allow_html=True)
+
 # -----------------------------
 # 1) 데이터 로드
 # -----------------------------
 meta_df = pd.read_csv(PREPROCESSED_PATH)
-df = pd.read_csv(DATA_PATH)  
+df = pd.read_csv(DATA_PATH)
+icon_base = ROOT / "assets" / "icons" 
+
 
 # -----------------------------
 # 2) 실제 데이터 값
@@ -62,38 +90,21 @@ def map_multi(v):
     if s in {"0.0"}:  return "한 집 배달"
     return str(v)  # 숫자 2,3 등 특수 케이스 그대로
 
-def build_subtitle(meta_df: pd.DataFrame, id_value: str, id_col="ID") -> str:
-    row = meta_df.loc[meta_df[id_col].astype(str).str.strip()==str(id_value).strip()]
-    if row.empty:
-        return ""  # 못 찾으면 빈 자막
-    r = row.iloc[0]
-
-    # 컬럼 이름 대소문자/언더스코어 유연 매칭
-    def pick(colname):
-        cols = {c.lower().replace(" ","_"): c for c in meta_df.columns}
-        key = colname.lower().replace(" ","_")
-        if key in cols: 
-            return r[cols[key]]
-        return None
-
-    dist   = pick("distance_km")
-    weath  = pick("Weatherconditions")
-    city   = pick("region_city")
-    multi  = pick("multiple_deliveries")
-    traf   = pick("Road_traffic_density")
-
-    # 포맷팅
-    dist_txt  = f"{float(dist):.1f} km" if pd.notna(dist) else "NA"
-    weath_txt = map_weather(weath) if weath is not None else "NA"
-    traf_txt  = map_traffic(traf) if traf is not None else "NA"
-    multi_txt = map_multi(multi)  if multi is not None else "NA"
-    city_txt  = str(city) if city is not None else "NA"
-
-    # 표시 문자열 (구분자는 요구한 대로 ' / ')
-    return f"교통 상황: {traf_txt} / 날씨: {weath_txt} / 거리: {dist_txt} / 배달 수: {multi_txt} / 지역: {city_txt}"
+def is_multi_delivery(v) -> bool:
+    """'1.0','2.0','3.0' → True, '0.0' → False (그 외는 값 보고 판단)"""
+    s = str(v).strip().lower()
+    if s in {"1", "1.0", "2", "2.0", "3", "3.0"}:
+        return True
+    if s in {"0", "0.0"}:
+        return False
+    # 혹시 숫자로 들어오면 0 초과면 동시배달로 간주
+    try:
+        return float(s) > 0.0
+    except:
+        return False
 
 # -----------------------------
-# 3) 플랏
+# 3) 버블 차트
 # -----------------------------
 def plot_feature_bubbles_for_id(
     df: pd.DataFrame,
@@ -101,10 +112,8 @@ def plot_feature_bubbles_for_id(
     *,
     id_col: str = "ID",
     prob_cols: list[str] | None = None,
-    title: str | None = None,
     figsize=(12, 10),
     area_gamma: float = 1.0,
-    subtitle: str | None = None,
 
     # === 스타일 파라미터 (조금 키움) ===
     ring_scale: float = 1.45,    # 중앙 원 대비 바깥 링 반지름 배율
@@ -266,6 +275,7 @@ def plot_feature_bubbles_for_id(
             fp.set_weight(weight)
             return fp
 
+
         # 라벨용/중앙라벨용 폰트
         fp_label  = _fp(fontprop, text_fontsize, "bold")
         fp_center = _fp(fontprop, text_fontsize + 2, "bold")
@@ -289,30 +299,11 @@ def plot_feature_bubbles_for_id(
             ax.text(cx[0], cy[0], txt0, ha="center", va="center",
                     fontsize=text_fontsize+2, fontweight="bold", color="#111", zorder=7)
 
-        # ---- 제목 ----
-        def _apply_title(fig, text, fontprop=None, size=24, weight="bold"):
-            fig.subplots_adjust(top=0.78)
-            if fontprop is not None:
-                fp = fontprop.copy(); fp.set_size(size); fp.set_weight(weight)
-                fig.suptitle(text, x=0.5, y=0.95, fontproperties=fp)
-            else:
-                fig.suptitle(text, x=0.5, y=0.95, fontsize=size, fontweight=weight)
-
-        _title = title if title is not None else f"ID ({id_value})의 변수 중요도"
-        _apply_title(fig, _title, fontprop=fontprop, size=24, weight="bold")
-
-        # ---- 자막(실제 입력값) ----
-        if subtitle:
-            if fontprop is not None:
-                fp2 = fontprop.copy(); fp2.set_size(14)
-                fig.text(0.5, 0.85, subtitle, ha="center", va="center", fontproperties=fp2, color="#333")
-            else:
-                fig.text(0.5, 0.85, subtitle, ha="center", va="center", fontsize=14, color="#333")
-
         # 여백
         pad = (base_radii.max() if len(base_radii) else 1.0) 
         ax.set_xlim(min(cx) - pad, max(cx) + pad)
         ax.set_ylim(min(cy) - pad, max(cy) + pad)
+
         return fig, ax
 
     # --- 8) 렌더링 ---
@@ -330,7 +321,6 @@ def plot_feature_bubbles_for_id(
                 time.sleep(frame_delay)
             return last_fig, None
         else:
-            # 일반 파이썬/노트북에서도 마지막 프레임 반환
             sf = 1.0
             fig, ax = draw_frame(sf)
             return fig, ax
@@ -340,23 +330,126 @@ def plot_feature_bubbles_for_id(
 
 
 # -----------------------------
-# 4) 특정 ID로 그리기
+# 4) 칩 (실제 데이터 값)
 # -----------------------------
-id_value = "0x9d32"
-subtitle = build_subtitle(meta_df, id_value)
+def _norm(s): 
+    return str(s).strip().lower().replace(" ", "_")
 
-ph = st.empty()
+def extract_meta(meta_df: pd.DataFrame, id_value: str, id_col="ID") -> dict:
+    row = meta_df.loc[meta_df[id_col].astype(str).str.strip()==str(id_value).strip()]
+    if row.empty:
+        return {}
+
+    r = row.iloc[0]
+    out = {}
+
+    # 원본 값
+    out["distance_km"] = float(r.get("distance_km", float("nan")))
+    out["region_city"] = str(r.get("region_city", "NA"))
+    out["multiple_deliveries"] = r.get("multiple_deliveries", "NA")
+
+    w_raw = r.get("Weatherconditions", "NA")
+    t_raw = r.get("Road_traffic_density", "NA")
+
+    # 표시 텍스트(한글)
+    out["weather_txt"] = map_weather(w_raw)
+    out["traffic_txt"] = map_traffic(t_raw)
+    out["multi_txt"]   = map_multi(out["multiple_deliveries"])
+
+    # 아이콘 파일명 키
+    out["weather_key"] = _norm(w_raw)     # fog, sunny, ...
+    out["traffic_key"] = _norm(t_raw)     # low, medium, high, jam
+
+    return out
+
+# 로컬 PNG -> DATA URI
+def img_to_data_uri(path: Path) -> str | None:
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode("utf-8")
+        ext = path.suffix.lower().lstrip(".") or "png"
+        mime = "png" if ext == "png" else "jpeg"
+        return f"data:image/{mime};base64,{b64}"
+    except Exception:
+        return None
+
+def render_meta_chips(meta: dict, icon_dir: Path):
+    """제목 아래에 아이콘+텍스트 칩을 한 줄로 렌더"""
+    if not meta:
+        return
+
+    chips = []
+
+    # (라벨, 값, 아이콘 경로)
+    multi_val  = meta.get("multiple_deliveries", "NA")
+    multi_icon = icon_dir / "delivery" / ("multiple.png" if is_multi_delivery(multi_val) else "only.png")
+
+    chips.append(("교통", meta.get("traffic_txt","NA"),
+                  icon_dir / "traffic" / f"{meta.get('traffic_key','')}.png"))
+    chips.append(("날씨", meta.get("weather_txt","NA"),
+                  icon_dir / "weather" / f"{meta.get('weather_key','')}.png"))
+    chips.append(("거리", f"{meta.get('distance_km', float('nan')):.1f} km" if pd.notna(meta.get('distance_km')) else "NA",
+                  icon_dir / "distance" / "distance.png"))
+    chips.append(("배달 수",
+              meta.get("multi_txt", "NA"),   # 이미 '동시 배달' / '한 집 배달' 매핑되어 있으면 이게 더 보기 좋아요
+              multi_icon))
+    chips.append(("지역", meta.get("region_city","NA"),
+                  icon_dir / "misc" / "city.png"))
+
+    parts = []
+    for label, value, p in chips:
+        img_html = ""
+        if p and p.exists():
+            uri = img_to_data_uri(p)
+            if uri:
+                img_html = f'<img src="{uri}" class="chip-icon" />'
+        parts.append(
+            f'<span class="chip">{img_html}<span class="chip-text">{label}: {value}</span></span>'
+        )
+
+    html = f"""
+    <style>
+      .page-title {{
+        font-family: 'TitleFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-weight: 700; font-size: 42px; line-height: 1.25;
+        text-align: center; margin: 6px 0 8px 0;
+      }}
+      .chip-row {{
+        display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+        margin: 6px 0 14px;
+        justify-content: center;
+      }}
+      .chip {{
+        display: inline-flex; align-items: center; gap: 8px;
+        padding: 6px 12px; border-radius: 14px;
+        background: #ffffff; border: 1px solid #c9d2b3;
+      }}
+      .chip-icon {{ width: 18px; height: 18px; }}
+      .chip-text {{
+        font-family: 'BodyFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 15px; color: #263018; font-weight: 500;
+      }}
+    </style>
+    <div class="chip-row">{''.join(parts)}</div>
+    """
+    st.markdown(html, unsafe_allow_html=True)
+
+# -----------------------------
+# 5) 특정 ID로 그리기
+# -----------------------------
+id_value = "0xd740"
+
+st.markdown(f"<div class='page-title'>⭐️ ID ({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
+meta = extract_meta(meta_df, id_value)
+render_meta_chips(meta, icon_base)
+
+# 그 다음 버블 플롯 (아이콘은 플롯 안에서는 끄기 추천)
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
-    figsize=(12, 10),        # 캔버스 넓게
-    ring_scale=1.08,         # 주변 원을 중앙에 바짝
-    radius_scale=8.0,        # 원 자체를 크게
-    gap_ratio=-0.05,         # 일부러 겹치도록(음수면 살짝 겹침 허용)
-    gap_abs=0.0,
-    area_gamma=1.6,
-    text_fontsize=18,        # 라벨도 큼직하게
-    animate=True, frames=5, frame_delay=0.012,  # 더 빠른 애니메이션
-    st_placeholder=ph,
-    subtitle=subtitle  
+    animate=True, frames=5, frame_delay=0.012,
+    ring_scale=1.08, radius_scale=8.0,
+    gap_ratio=-0.05, gap_abs=0.0,
+    area_gamma=1.6, text_fontsize=18,
+    st_placeholder=st.empty()
 )
