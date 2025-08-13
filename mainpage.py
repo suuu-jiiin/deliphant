@@ -12,6 +12,7 @@ from streamlit_folium import st_folium
 from datetime import datetime, timedelta
 import base64
 from pathlib import Path
+import time
 
 st.set_page_config(page_title="배달 예측(실제경로 + CSV 색)", layout="wide")
 st.title("🚚 배달 예측 대시보드")
@@ -242,39 +243,109 @@ with right_col:
     st.altair_chart(bar, use_container_width=True)
     st.caption("※ 실제 모델 중요도 연결 시 이 영역 교체 예정")
 
-# ========================= [BLOCK 7] 하단 파이프라인 (선택 주문) =========================
+# ========================= [BLOCK 7] 하단 파이프라인 (시뮬 시간, 동적 체크, 오토바이 애니메이션) =========================
+import time
+import streamlit.components.v1 as components
+
 st.markdown("---")
 st.subheader("주문 파이프라인")
 
 if sel is None:
     st.info("주문을 선택하세요.")
 else:
+    # --- 원본 시간/수치 파싱 ---
     order_dt   = parse_datetime(sel[COL["date"]], sel[COL["order_time"]])
     pickup_dt  = parse_datetime(sel[COL["date"]], sel[COL["pickup_time"]])
-    prep_min   = float(sel[COL["prep_min"]]) if pd.notna(sel[COL["prep_min"]]) else np.nan
+    prep_min   = float(sel[COL["prep_min"]])  if pd.notna(sel[COL["prep_min"]])  else np.nan
     total_min  = float(sel[COL["total_min"]]) if pd.notna(sel[COL["total_min"]]) else np.nan
 
+    # ✅ 실제 배달 완료까지 걸린 시간(분) = Time_real (없으면 fallback)
+    if "Time_real" in sel and pd.notna(sel["Time_real"]):
+        deliver_only_min = float(sel["Time_real"])
+    else:
+        deliver_only_min = (max(0, total_min - prep_min)
+                            if (not np.isnan(total_min) and not np.isnan(prep_min))
+                            else None)
+
+    # 보간
     if (pickup_dt is None) and (order_dt is not None) and (not np.isnan(prep_min)):
         pickup_dt = order_dt + timedelta(minutes=prep_min)
-    delivered_dt = None
-    if (order_dt is not None) and (not np.isnan(total_min)):
-        delivered_dt = order_dt + timedelta(minutes=total_min)
+    delivered_dt = (pickup_dt + timedelta(minutes=deliver_only_min)) if (pickup_dt and deliver_only_min is not None) \
+                   else (order_dt + timedelta(minutes=total_min) if (order_dt and not np.isnan(total_min)) else None)
 
-    now_str = datetime.now().strftime("%H:%M")
-    ot_str  = fmt_kor(order_dt)
-    prep_str= f"약 {int(round(prep_min))}분 소요" if not np.isnan(prep_min) else "-"
-    pk_str  = fmt_kor(pickup_dt)
-    deliver_only = None
-    if not np.isnan(total_min) and not np.isnan(prep_min):
-        deliver_only = max(0, total_min - prep_min)
-    dl_str  = f"약 {int(round(deliver_only))}분 소요" if deliver_only is not None else "-"
-    dv_str  = fmt_kor(delivered_dt)
+    # --- ⏱ 시뮬레이터: 현실 3초 = 시뮬 1분 ---
+    # 상태 저장 키: 주문 변경/픽업시각 변경 시 앵커 리셋
+    need_reset = False
+    if st.session_state.get("sim_id") != sel[COL["id"]]:
+        need_reset = True
+    if st.session_state.get("sim_pickup") != (pickup_dt.isoformat() if pickup_dt else None):
+        need_reset = True
 
-    timeline_html = f"""
+    if need_reset:
+        st.session_state["sim_id"] = sel[COL["id"]]
+        st.session_state["sim_pickup"] = (pickup_dt.isoformat() if pickup_dt else None)
+        st.session_state["sim_anchor_real"] = datetime.now()
+        st.session_state["sim_anchor_sim"]  = pickup_dt or order_dt or datetime.now()
+
+    anchor_real = st.session_state["sim_anchor_real"]
+    anchor_sim  = st.session_state["sim_anchor_sim"]
+
+    # 현실 경과초 → 시뮬 경과분 (3초 = 1분 → 배속 20x)
+    real_elapsed_sec = (datetime.now() - anchor_real).total_seconds()
+    sim_elapsed_min  = real_elapsed_sec / 3.0
+    sim_now = anchor_sim + timedelta(minutes=sim_elapsed_min)
+
+    # 픽업~완료 구간으로 클램프(픽업 전이면 픽업에 고정, 완료 지나면 완료에 고정)
+    if pickup_dt:
+        if delivered_dt:
+            sim_now = min(max(sim_now, pickup_dt), delivered_dt)
+        else:
+            sim_now = max(sim_now, pickup_dt)
+
+    # --- 진행률/ETA(시뮬 시간 기준) ---
+    progress_pct = 0.0
+    eta_remain_min = None
+    if pickup_dt and delivered_dt and delivered_dt > pickup_dt:
+        total_sec   = (delivered_dt - pickup_dt).total_seconds()
+        elapsed_sec = (sim_now - pickup_dt).total_seconds()
+        progress_pct = max(0.0, min(elapsed_sec / total_sec, 1.0))
+        if 0 <= progress_pct < 1:
+            eta_remain_min = max(0, int(round((1 - progress_pct) * total_sec / 60)))
+
+    # --- 상태 체크(시뮬 시간 기준) ---
+    accepted_done  = (order_dt is not None)    and (sim_now >= order_dt)
+    prepared_done  = (pickup_dt is not None)   and (sim_now >= pickup_dt)
+    delivered_done = (delivered_dt is not None) and (sim_now >= delivered_dt)
+
+    # --- 표기 문자열 ---
+    now_str  = sim_now.strftime("%H:%M")                     # "현재 시각(픽업 기준)" = 시뮬 시간
+    ot_str   = fmt_kor(order_dt)
+    pk_str   = fmt_kor(pickup_dt)
+    dv_str   = fmt_kor(delivered_dt)
+    prep_str = f"약 {int(round(prep_min))}분 소요" if not np.isnan(prep_min) else "-"
+
+    # 뱃지 HTML
+    def badge_html(checked: bool) -> str:
+        return '<div class="badge">✓</div>' if checked else '<div class="badge-empty"></div>'
+
+    accepted_badge  = badge_html(accepted_done)
+    prepared_badge  = badge_html(prepared_done)
+    delivered_badge = badge_html(delivered_done)
+
+    # 진행 게이지/오토바이 위치
+    prog_width = f"{progress_pct * 100:.1f}%"
+    remain_text = (
+        f"남은 약 {eta_remain_min}분" if eta_remain_min is not None
+        else ("완료" if delivered_done else ("곧 시작" if not prepared_done else "-"))
+    )
+    bike_left = prog_width
+
+    # --- HTML/CSS + 렌더 ---
+    pipeline_html = f"""
     <style>
     .step-wrap{{display:flex;align-items:center;gap:48px;margin-top:10px;margin-bottom:10px}}
     .step{{text-align:center}}
-    .badge{{width:82px;height:82px;border-radius:50%;background:#E07A18;color:white;
+    .badge{{width:82px;height:82px;border-radius:50%;background:#5A754D;color:white;
            display:flex;align-items:center;justify-content:center;font-weight:800;font-size:28px;
            box-shadow:inset -6px -6px 0 rgba(0,0,0,0.15)}}
     .badge-empty{{width:82px;height:82px;border-radius:50%;border:10px solid #5A615D;background:#fff}}
@@ -282,41 +353,71 @@ else:
     .step-title{{font-size:24px;font-weight:700;margin-bottom:6px}}
     .step-sub{{color:#8B8F90;font-size:20px}}
     .big-clock{{font-size:64px;color:#5A754D;font-weight:900;margin:0}}
+
+    /* 진행 게이지 + 오토바이 */
+    .progress-wrap{{min-width:320px}}
+    .progress-track{{position:relative;height:16px;background:#E9ECEB;border-radius:10px;overflow:hidden}}
+    .progress-fill{{position:absolute;left:0;top:0;height:100%;width:{prog_width};background:#E07A18;
+                    transition:width 0.8s ease;}}
+    .progress-bike{{position:absolute;top:50%;left:{bike_left};transform:translate(-50%,-50%);
+                    font-size:22px; line-height:1; transition:left 0.8s ease;}}
+    .progress-label{{margin-top:6px;color:#6B7072;font-size:14px}}
     </style>
 
     <div style="display:flex;justify-content:space-between;align-items:center;">
+      <!-- 현재 시각(픽업 기준: 시뮬 시간) -->
       <div class="step">
-        <div class="step-title">현재 시각</div>
+        <div class="step-title">현재 시각 (픽업 기준)</div>
         <div class="big-clock">{now_str}</div>
       </div>
+
       <div class="step-wrap" style="flex:1;margin-left:24px;margin-right:24px;">
+        <!-- 주문 수락 -->
         <div class="step">
           <div class="step-title">주문 수락됨</div>
-          <div class="badge">✓</div>
+          {accepted_badge}
           <div class="step-sub">{ot_str}</div>
         </div>
+
         <div class="line"></div>
+
+        <!-- 메뉴 준비 -->
         <div class="step">
           <div class="step-title">메뉴 준비중</div>
-          <div class="badge-empty"></div>
+          {prepared_badge}
           <div class="step-sub">{prep_str}</div>
         </div>
+
         <div class="line"></div>
-        <div class="step">
+
+        <!-- 배달중: 게이지 + 오토바이 -->
+        <div class="step progress-wrap">
           <div class="step-title">배달중</div>
-          <div class="badge-empty"></div>
-          <div class="step-sub">{pk_str}</div>
+          <div class="progress-track">
+            <div class="progress-fill"></div>
+            <div class="progress-bike">🛵</div>
+          </div>
+          <div class="progress-label">{pk_str} · {remain_text}</div>
         </div>
+
         <div class="line"></div>
+
+        <!-- 배달 완료 -->
         <div class="step">
           <div class="step-title">배달 완료</div>
-          <div class="badge-empty"></div>
+          {delivered_badge}
           <div class="step-sub">{dv_str}</div>
         </div>
       </div>
     </div>
     """
-    st.markdown(timeline_html, unsafe_allow_html=True)
+
+    components.html(pipeline_html, height=320, scrolling=False)
+
+    # ─ 자동 리프레시: 배달중 구간에서 3초마다 재실행(현실 3초 → 시뮬 1분)
+    if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
+        time.sleep(3)
+        st.rerun()
 
 # ========================= [BLOCK 8] 주의사항 =========================
 st.caption("ℹ️ 경로는 Mapbox Directions(driving)로 계산된 '현재' 기준 도로 경로이며, 선 색상은 CSV의 Road_traffic_density 값을 그대로 반영합니다(실시간 교통 미사용).")
