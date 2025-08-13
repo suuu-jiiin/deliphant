@@ -16,7 +16,6 @@ if str(ROOT) not in sys.path:
     
 from utils.paths import DATA_PATH, FONT_PATH
 
-
 # 한국어 폰트 
 def use_korean_font(font_path):
     """로컬 TTF 등록 후 전역 기본 폰트 설정 + FontProperties 반환"""
@@ -275,7 +274,7 @@ df = pd.read_csv(DATA_PATH)
 # -----------------------------
 # 3) 특정 ID로 그리기
 # -----------------------------
-id_value = "0x6f80"
+id_value = "0x8b39"
 ph = st.empty()
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
