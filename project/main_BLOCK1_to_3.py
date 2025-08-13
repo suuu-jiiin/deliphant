@@ -1,3 +1,8 @@
+'''
+<작업내역>
+final_merged_df.csv에서 선택한 ID만 남김.
+ID값 뒤부분 spacebar 공백제거
+'''
 # ========================= [BLOCK 1] 기본 설정 & 라이브러리 =========================
 import math
 import requests
