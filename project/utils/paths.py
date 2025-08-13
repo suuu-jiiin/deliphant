@@ -23,8 +23,10 @@ if PROJECT_ROOT.name == "utils" and (PROJECT_ROOT.parent / "data").exists():
 DEFAULT_FONT_PATH = PROJECT_ROOT / "project" / "assets" / "fonts" / "NanumSquareRoundL.ttf"
 DEFAULT_DATA_PATH = PROJECT_ROOT / "project" / "data" / "feature_importance.csv"
 DEFAULT_PREPROCESSED_PATH = PROJECT_ROOT / "project" /  "data" / "preprocessed_data.csv"
+DEFAULT_FINAL_PATH = PROJECT_ROOT / "project" /  "data" / "final_merged_df.csv"
 
 # 환경변수 우선 → 없으면 기본값
 FONT_PATH = Path(os.getenv("FONT_PATH", str(DEFAULT_FONT_PATH)))
 DATA_PATH = Path(os.getenv("DATA_PATH", str(DEFAULT_DATA_PATH)))
 PREPROCESSED_PATH = Path(os.getenv("PREPROCESSED_PATH", str(DEFAULT_PREPROCESSED_PATH)))
+LOCAL_CSV_PATH = Path(os.getenv("LOCAL_CSV_PATH", str(DEFAULT_FINAL_PATH)))

@@ -66,7 +66,6 @@ meta_df = pd.read_csv(PREPROCESSED_PATH)
 df = pd.read_csv(DATA_PATH)
 icon_base = ROOT / "assets" / "icons" 
 
-
 # -----------------------------
 # 2) 실제 데이터 값
 # -----------------------------
@@ -183,7 +182,7 @@ def plot_feature_bubbles_for_id(
     base_radii = (k * np.sqrt(adj)) * radius_scale  # scale_factor=1일 때의 반지름
 
     # 중앙(최대) 원 강조
-    center_boost = 1.15   # ← 1.0~1.25 사이로 취향껏
+    center_boost = 1.00   # ← 1.0~1.25 사이로 취향껏
     base_radii[0] *= center_boost
 
     # --- 4) 좌표 배치: 중앙(0,0), 나머지 링에 균등 ---
@@ -437,7 +436,17 @@ def render_meta_chips(meta: dict, icon_dir: Path):
 # -----------------------------
 # 5) 특정 ID로 그리기
 # -----------------------------
-id_value = "0xd740"
+def clean_id(x: object) -> str:
+    s = str(x)
+    s = s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "")
+    return s.strip()
+
+selected_id = st.session_state.get("selected_id")
+if not selected_id:
+    st.warning("선택된 주문 ID가 없습니다. 먼저 홈 화면에서 주문을 선택하세요.")
+    st.stop()
+
+id_value = clean_id(selected_id)
 
 st.markdown(f"<div class='page-title'>⭐️ ID ({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
 meta = extract_meta(meta_df, id_value)
@@ -448,7 +457,7 @@ fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
     animate=True, frames=5, frame_delay=0.012,
-    ring_scale=1.08, radius_scale=8.0,
+    ring_scale=1.08, radius_scale=6.0,
     gap_ratio=-0.05, gap_abs=0.0,
     area_gamma=1.6, text_fontsize=18,
     st_placeholder=st.empty()
