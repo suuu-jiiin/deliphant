@@ -10,12 +10,14 @@ import numpy as np
 import streamlit as st
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
+import base64
+from pathlib import Path
 
 st.set_page_config(page_title="배달 예측(실제경로 + CSV 색)", layout="wide")
 st.title("🚚 배달 예측 대시보드")
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
-MAPBOX_TOKEN   = "mapboxToken"
+MAPBOX_TOKEN   = ""
 LOCAL_CSV_PATH = "final_merged_df_sample.csv"         # ← CSV 경로
 
 COL = {
@@ -127,6 +129,18 @@ sel = orders[orders[COL["id"]] == selected_id].iloc[0] if order_ids else None
 left_col, mid_col, right_col = st.columns([1.3, 1.0, 1.0])
 
 # ---- 좌: 지도 (실제 경로 + CSV 색상)
+
+def local_image_to_data_url(img_path):
+    with open(img_path, "rb") as f:
+        data = f.read()
+    return "data:image/png;base64," + base64.b64encode(data).decode()
+
+# 예: 로컬 PNG 경로
+start_icon_path = Path("restaurant.png")
+end_icon_path   = Path("home.png")
+
+start_icon_url = local_image_to_data_url(start_icon_path)
+end_icon_url   = local_image_to_data_url(end_icon_path)
 with left_col:
     st.subheader("지도 / 실제 도로 경로 (CSV 혼잡도 색)")
     if sel is None:
@@ -150,8 +164,10 @@ with left_col:
 
             center = ((s_lat + e_lat) / 2, (s_lng + e_lng) / 2)
             m = folium.Map(location=center, zoom_start=14, tiles="OpenStreetMap")
-            folium.Marker((s_lat, s_lng), tooltip="출발(매장)", icon=folium.Icon(color="green", icon="motorcycle", prefix="fa")).add_to(m)
-            folium.Marker((e_lat, e_lng), tooltip="도착(고객)", icon=folium.Icon(color="red", icon="flag-checkered", prefix="fa")).add_to(m)
+            # folium.Marker((s_lat, s_lng), tooltip="출발(매장)", icon=folium.Icon(color="green", icon="motorcycle", prefix="fa")).add_to(m)
+            # folium.Marker((e_lat, e_lng), tooltip="도착(고객)", icon=folium.Icon(color="red", icon="flag-checkered", prefix="fa")).add_to(m)
+            folium.Marker((s_lat, s_lng),tooltip="출발",icon=folium.CustomIcon(start_icon_url, icon_size=(50, 50))).add_to(m)
+            folium.Marker((e_lat, e_lng),tooltip="도착",icon=folium.CustomIcon(end_icon_url, icon_size=(50, 50))).add_to(m)
 
             # ▼ 전체 경로에 CSV 혼잡도 색상 적용 (단일 색)
             folium.PolyLine(coords, color=color, weight=8, opacity=0.95).add_to(m)
