@@ -351,6 +351,7 @@ def extract_meta(meta_df: pd.DataFrame, id_value: str, id_col="ID") -> dict:
     out["distance_km"] = float(r.get("distance_km", float("nan")))
     out["region_city"] = str(r.get("region_city", "NA"))
     out["multiple_deliveries"] = r.get("multiple_deliveries", "NA")
+    out["region"] = str(r.get("region", r.get("region_city", "NA")))
 
     w_raw = r.get("Weatherconditions", "NA")
     t_raw = r.get("Road_traffic_density", "NA")
@@ -397,7 +398,7 @@ def render_meta_chips(meta: dict, icon_dir: Path):
     chips.append(("배달 수",
               meta.get("multi_txt", "NA"),   # 이미 '동시 배달' / '한 집 배달' 매핑되어 있으면 이게 더 보기 좋아요
               multi_icon))
-    chips.append(("지역", meta.get("region_city","NA"),
+    chips.append(("지역", meta.get("region","NA"),
                   icon_dir / "city" / "city.png"))
 
     parts = []
