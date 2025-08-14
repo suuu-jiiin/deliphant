@@ -46,6 +46,11 @@ COL = {
     "traffic": "Road_traffic_density",  # Low / Medium / High / Jam
     "festival": "Festival",        # yes / no
     "peak_flag": "Peak_flag",      # 1 / 0
+    "region": "region",
+    "restaurant_name": "Restaurant_name_real",
+    "courier_id": "Delivery_person_ID",
+    "courier_age": "Delivery_person_Age",
+    "courier_rating": "Delivery_person_Ratings",
 }
 
 ROAD_TRAFFIC_COLOR = {
@@ -134,37 +139,98 @@ def fetch_route_mapbox_geometry(start_lat, start_lng, end_lat, end_lng, token: s
     coords_latlon = [(lat, lon) for lon, lat in coords]
     return {"distance_m": distance_m, "duration_s": duration_s, "coords_latlon": coords_latlon}
 
-# ================================ [BLOCK 5] 주문 선택 ==================================
-st.markdown("### 🔎 주문 선택")
+# ========================= [BLOCK 5] 주문 선택 + 정보 패널 =========================
+st.markdown("### 🔎 주문 선택 & 정보")
 
-# ID 컬럼 먼저 정규화(앞뒤 공백/눈에 안 보이는 공백 제거)
-def clean_id(x: object) -> str:
-    s = str(x)
-    # 흔한 보이지 않는 공백 제거(\u00A0=non-breaking space, \ufeff=BOM, \u200b=zero-width space)
-    s = s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "")
-    return s.strip()
+# 좌우로 분할: 왼쪽(좁게) = 주문 선택, 오른쪽(넓게) = 매장/배달원 정보
+sel_left, sel_right = st.columns([1.0, 2.2])
 
-orders[COL["id"]] = orders[COL["id"]].apply(clean_id)
+with sel_left:
+    order_ids = orders[COL["id"]].tolist() if COL["id"] in orders.columns else []
+    default_idx = len(order_ids) - 1 if order_ids else 0
+    selected_id = st.selectbox("주문 ID", order_ids, index=default_idx)
 
-# 선택지에도 정규화 적용
-order_ids = orders[COL["id"]].tolist()
+# 선택된 행
+sel = orders[orders[COL["id"]] == selected_id].iloc[0] if order_ids else None
 
-# 선택박스 표시 시에도 strip된 형태로 보이도록(안전)
-selected_id = st.selectbox(
-    "주문 ID", 
-    order_ids, 
-    index=len(order_ids) - 1 if order_ids else 0,
-    format_func=lambda x: clean_id(x)
-)
+with sel_right:
+    # 값 준비
+    if sel is None:
+        region = rname = courier_id = courier_age = courier_rating = "—"
+    else:
+        region = sel.get(COL["region"], "—") if COL["region"] in sel else "—"
+        rname  = sel.get(COL["restaurant_name"], "—") if COL["restaurant_name"] in sel else "—"
 
-# 선택값 정규화해서 세션에 저장
-selected_id_clean = clean_id(selected_id)
-st.session_state["selected_id"] = selected_id_clean
+        courier_id_raw     = sel.get(COL["courier_id"], "—") if COL["courier_id"] in sel else "—"
+        courier_age_raw    = sel.get(COL["courier_age"], "—") if COL["courier_age"] in sel else "—"
+        courier_rating_raw = sel.get(COL["courier_rating"], "—") if COL["courier_rating"] in sel else "—"
 
-# 사용할 때도 정규화값으로 비교
-sel_mask = orders[COL["id"]].apply(clean_id) == selected_id_clean
-sel = orders.loc[sel_mask].iloc[0] if sel_mask.any() else None
+        # 나이 → 연령대 변환
+        try:
+            age_int = int(float(courier_age_raw)) if pd.notna(courier_age_raw) else None
+            if age_int is not None:
+                decade = (age_int // 10) * 10
+                courier_age = f"{decade}대"
+            else:
+                courier_age = "—"
+        except Exception:
+            courier_age = "—"
 
+
+        try:
+            courier_rating = round(float(courier_rating_raw), 2) if pd.notna(courier_rating_raw) else "—"
+        except Exception:
+            courier_rating = courier_rating_raw if str(courier_rating_raw).strip().lower() != "nan" else "—"
+
+        courier_id = courier_id_raw if str(courier_id_raw).strip() else "—"
+
+    # 회색 박스 하나만 렌더
+    panel_html = f"""
+    <style>
+      .info-panel {{
+        background:#f2f2f2; padding:16px 18px; border-radius:10px;
+      }}
+      .section-title {{ margin:0 0 10px 0; font-weight:700; font-size:30px; }}
+      .grid-2 {{ display:grid; grid-template-columns: 1fr 2fr; gap:12px; }}
+      .grid-3 {{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }}
+      .info-card {{
+        background:#ffffff; border:1px solid #e3e3e3; border-radius:8px; padding:10px 12px;
+      }}
+      .label {{ color:#70757a; font-size:18px; font-weight:600; margin-bottom:4px; }}
+      .value {{ font-size:20px; font-weight:700; }}
+    </style>
+
+    <div class="info-panel">
+      <div class="section-title">🍽️ 매장 정보</div>
+      <div class="grid-2" style="margin-bottom:14px;">
+        <div class="info-card">
+          <div class="label">지역</div>
+          <div class="value">{region}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">매장명</div>
+          <div class="value">{rname}</div>
+        </div>
+      </div>
+
+      <div class="section-title">🛵 배달원 정보</div>
+      <div class="grid-3">
+        <div class="info-card">
+          <div class="label">배달원 ID</div>
+          <div class="value">{courier_id}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">나이</div>
+          <div class="value">{courier_age}</div>
+        </div>
+        <div class="info-card">
+          <div class="label">평점</div>
+          <div class="value">{courier_rating}</div>
+        </div>
+      </div>
+    </div>
+    """
+    st.markdown(panel_html, unsafe_allow_html=True)
 # ========================= [BLOCK 6] 축제 및 피크 시간대 경고 =========================
 def trigger_fireworks(duration_sec: float = 2.5, height: int = 120):
     """전체 화면에 폭죽 애니메이션 (canvas-confetti)."""
@@ -256,6 +322,12 @@ with left_col:
             # ▼ 전체 경로에 CSV 혼잡도 색상 적용 (단일 색)
             folium.PolyLine(coords, color=color, weight=8, opacity=0.95).add_to(m)
 
+            # ▼ 경로 전체가 화면에 들어오도록 자동 맞춤
+            lats = [lat for (lat, lon) in coords]
+            lngs = [lon for (lat, lon) in coords]
+            bounds = [[min(lats), min(lngs)], [max(lats), max(lngs)]]
+            m.fit_bounds(bounds, padding=(30, 30))  # 여백(px) 적당히 조절
+            
             # 간단 범례
             import branca
             legend = """
