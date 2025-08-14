@@ -212,7 +212,6 @@ else:
 
 # ========================= [BLOCK 7] 3분할 레이아웃 =========================
 left_col, mid_col, right_col = st.columns([1.3, 1.0, 1.0])
-
 # ---- 좌: 지도 (실제 경로 + CSV 색상)
 
 def local_image_to_data_url(img_path):
@@ -285,7 +284,6 @@ with left_col:
 with mid_col:
     # 전체 orders 데이터프레임이 비어있지 않은 경우에만 실행
     if not orders.empty:
-        # **수정된 부분**: `st.selectbox`에서 선택된 ID에 맞는 행을 가져옵니다.
         target_row = orders[orders[COL["id"]] == selected_id].iloc[0]
         
         # 클래스를 시간(분) 범위로 매핑하는 딕셔너리
@@ -492,7 +490,7 @@ with mid_col:
             col1, col2, col3 = st.columns([1, 1, 1])
             with col2:
                 if st.button("상세 보기", use_container_width=True):
-                    st.switch_page("pages/prob_distribution.py")
+                    st.switch_page('pages/prob_distribution.py')
         else:
             st.warning("차트를 표시할 예측 확률 데이터가 없습니다.")
 
@@ -640,7 +638,7 @@ with right_col:
                         # 세션/쿼리파라미터에 ID 저장 (둘 다 써도 OK)
                         st.session_state["selected_id"] = selected_id_clean
                         st.query_params.update({"id": selected_id_clean})
-                        st.switch_page("pages/feature_importance.py")
+                        st.switch_page('pages/feature_importance.py')
 
 # ========================= [BLOCK 8] 하단 파이프라인 (선택 주문) =========================
 st.markdown("---")
@@ -859,7 +857,6 @@ else:
       {overlay_html}
     </div>
     """
-
 
     components.html(pipeline_html, height=320, scrolling=False)
 
