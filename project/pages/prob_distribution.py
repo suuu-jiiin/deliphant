@@ -3,18 +3,46 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import ast
+from utils.paths import PROB_PATH
 
-st.set_page_config(page_title="확률분포 대시보드")
-st.title("예상 배달소요시간별 확률 상세보기")
+def clean_id(x: object) -> str:
+    s = str(x)
+    s = s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "")
+    return s.strip()
+
+selected_id = st.session_state.get("selected_id")
+if not selected_id:
+    st.warning("선택된 주문 ID가 없습니다. 먼저 홈 화면에서 주문을 선택하세요.")
+    st.stop()
+
+id_value = clean_id(selected_id)
+st.set_page_config(page_title="확률분포 상세페이지", layout="centered")
+st.markdown("""
+<style>
+.page-title {
+  font-size: 35px;
+  font-weight: 800;
+  line-height: 1.2;
+  margin: 6px 0 12px 0;
+}
+.page-title.left   { text-align: left; }
+.page-title.center { text-align: center; }
+.page-title.right  { text-align: right; }
+</style>
+""", unsafe_allow_html=True)
+
+# 사용 예시
+st.markdown(f"<div class='page-title center'>⭐️ 배달 ID ({id_value})의 소요시간 확률분포도 ⭐️</div>", unsafe_allow_html=True)
+st.write("")
 
 # --- 데이터 로드 및 준비 ---
 @st.cache_data
 def load_data():
     """데이터를 로드하고 캐싱합니다."""
     try:
-        df = pd.read_csv('pages/prob_distribution.csv')
+        df = pd.read_csv(PROB_PATH)
     except FileNotFoundError:
-        st.warning("⚠️ prob_distribution.csv 파일을 찾을 수 없어 예제 데이터로 실행합니다.", icon="⚠️")
+        st.warning("prob_distribution.csv 파일을 찾을 수 없어 예제 데이터로 실행합니다.", icon="⚠️")
         data = {
             'ID': [f'ID_{i}' for i in range(1, 11)],
             '1.0': [0.1, 0.2, 0.05, 0.15, 0.05, 0.1, 0.2, 0.05, 0.15, 0.05],
@@ -36,11 +64,10 @@ x_labels_map = {i/10: f"{i}~{i+4}분" for i in range(10, 60, 5)}
 
 if 'selected_id' in st.session_state:
     selected_id = st.session_state['selected_id']
-    st.markdown(f"**배달 ID:** `{selected_id}`")
     id_data = df[df['ID'] == selected_id]
 else:
     st.info("메인 페이지로 돌아가서 배달 ID를 선택해주세요.")
-    st.page_link(page="0813_1630_main.py", label="메인 페이지로 돌아가기")
+    st.page_link(page="home.py", label="메인 페이지로 돌아가기")
     id_data = pd.DataFrame()
 
 if not id_data.empty:
@@ -148,3 +175,7 @@ if not id_data.empty:
 
 else:
     st.error("선택된 ID에 대한 데이터를 찾을 수 없습니다.")
+
+# --- 메인 페이지로 돌아가는 버튼 ---
+st.divider()
+st.page_link(page="home.py", label="메인 페이지로 돌아가기", icon="🏠")
