@@ -474,13 +474,13 @@ render_meta_chips(meta, icon_base)
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
-    figsize=(11, 11),  # <<<--- 1. 전체 그림(Figure) 크기 줄이기
+    figsize=(9, 9),  # <<<--- 1. 전체 그림(Figure) 크기 줄이기
     animate=True, frames=5, frame_delay=0.012,
     ring_scale=1.08, 
     radius_scale=5.0, # <<<--- 2. 버블의 상대적 크기 약간 줄이기
     gap_ratio=-0.05, gap_abs=0.0,
     area_gamma=1.6, 
-    text_fontsize=16, # <<<--- 3. 폰트 크기도 균형에 맞게 조절
+    text_fontsize=13, # <<<--- 3. 폰트 크기도 균형에 맞게 조절
     st_placeholder=st.empty()
 )
 
