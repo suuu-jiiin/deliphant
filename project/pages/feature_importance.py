@@ -16,6 +16,9 @@ from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.offsetbox import OffsetImage, AnnotationBbox
 import sys
 from pathlib import Path
+import os
+
+
 
 ROOT = Path(__file__).resolve().parents[1]  
 if str(ROOT) not in sys.path:
@@ -448,17 +451,26 @@ if not selected_id:
 
 id_value = clean_id(selected_id)
 
-st.markdown(f"<div class='page-title'>⭐️ ID ({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
+st.set_page_config(page_title="변수중요도 상세페이지", layout="centered")
+st.markdown(f"<div class='page-title'>⭐️ 배달 ID ({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
 meta = extract_meta(meta_df, id_value)
 render_meta_chips(meta, icon_base)
 
-# 그 다음 버블 플롯 (아이콘은 플롯 안에서는 끄기 추천)
+# 버블 플롯
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
+    figsize=(7, 7),  # <<<--- 1. 전체 그림(Figure) 크기 줄이기
     animate=True, frames=5, frame_delay=0.012,
-    ring_scale=1.08, radius_scale=6.0,
+    ring_scale=1.08, 
+    radius_scale=5.0, # <<<--- 2. 버블의 상대적 크기 약간 줄이기
     gap_ratio=-0.05, gap_abs=0.0,
-    area_gamma=1.6, text_fontsize=18,
+    area_gamma=1.6, 
+    text_fontsize=14, # <<<--- 3. 폰트 크기도 균형에 맞게 조절
     st_placeholder=st.empty()
 )
+
+# --- 메인 페이지로 돌아가는 버튼 ---
+st.divider()
+st.page_link(page="home.py", label="메인 페이지로 돌아가기", icon="🏠")
+
