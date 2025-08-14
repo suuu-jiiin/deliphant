@@ -486,5 +486,4 @@ fig, _ = plot_feature_bubbles_for_id(
 
 # --- 메인 페이지로 돌아가는 버튼 ---
 st.divider()
-st.page_link(page="home.py", label="메인 페이지로 돌아가기", icon="🏠")
-
+st.page_link(page="pages/home.py", label="메인 페이지로 돌아가기", icon="🏠")
