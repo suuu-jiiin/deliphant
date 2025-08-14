@@ -1253,5 +1253,5 @@ with r2[3]:
 
 
 if 'rerun_needed' in locals() and rerun_needed:
-    time.sleep(3)
+    time.sleep(1)
     st.rerun()
