@@ -1,7 +1,10 @@
+# app_main_local_density_route.py
+# 단일 주문 선택 → CSV Road_traffic_density 색상으로 "실제 도로 경로" 표시 (Mapbox driving, no traffic)
+# 업로드 UI 없음, 로컬 CSV 사용, 하단 파이프라인 유지
+
 # ========================= [BLOCK 1] 기본 설정 & 라이브러리 =========================
 import folium
 import time
-import textwrap
 import requests
 import pandas as pd
 import numpy as np
@@ -23,6 +26,25 @@ st.set_page_config(page_title="배달 예측(메인)", layout="wide")
 FX_SLOT = st.container()
 
 st.title("🚚 Deliphant 배달 현황")
+
+######### 페이지 변환 네비게이션 ########3
+qp = st.query_params
+to = qp.get("to")
+if to == "prob":
+    qid = qp.get("id")
+    if qid:
+        st.session_state["selected_id"] = qid  # ★ 쿼리 → 세션 복사
+    # (선택) URL 깨끗하게: 이동 전에 파라미터 지우기
+    st.query_params.clear()
+    st.switch_page("pages/prob_distribution.py")
+
+elif to == "fi":
+    qid = qp.get("id")
+    if qid:
+        st.session_state["selected_id"] = qid  # ★ 쿼리 → 세션 복사
+    st.query_params.clear()
+    st.switch_page("pages/feature_importance.py")
+
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
 MAPBOX_TOKEN   = ""
@@ -48,6 +70,7 @@ COL = {
     "courier_age": "Delivery_person_Age",
     "courier_rating": "Delivery_person_Ratings",
 }
+
 
 ROAD_TRAFFIC_COLOR = {
     "low": "#1DB954",      # 초록
@@ -299,6 +322,21 @@ else:
     # 축제가 아니면 슬롯 비우기(이전 렌더 지우기)
     FX_SLOT.empty()
 
+# 피크 효과 + 알림 
+if is_peak:
+    if not st.session_state.get("_peak_toast_shown"):
+        st.toast("피크 시간대라 배달이 늦어지고 있어요 🥹")
+        st.session_state["_peak_toast_shown"] = True
+else:
+    # 피크 해제 시 다음 번에 다시 토스트 보낼 수 있도록 플래그 리셋
+    st.session_state["_peak_toast_shown"] = False
+
+peak_text_html = ""
+if is_peak:
+    peak_text_html = """
+        <div style="color:#e11d48; font-weight:700; font-size:14px; margin-top:4px;">피크 시간대 입니다</div>
+        """
+
 # ========================= [BLOCK 7] 3분할 레이아웃 =========================
 # -------------------------------------------------
 # (A) 먼저 상태/시간/진행률을 모두 계산
@@ -497,6 +535,7 @@ with top_scope:
                 lngs = [lon for (lat, lon) in coords]
                 bounds = [[min(lats), min(lngs)], [max(lats), max(lngs)]]
                 m.fit_bounds(bounds, padding=(30, 30))  # 여백(px) 적당히 조절
+                            
                 # 간단 범례
                 import branca
                 legend = """
@@ -525,6 +564,7 @@ with top_scope:
     with mid_col:
         # 전체 orders 데이터프레임이 비어있지 않은 경우에만 실행
         if not orders.empty:
+            # **수정된 부분**: `st.selectbox`에서 선택된 ID에 맞는 행을 가져옵니다.
             target_row = orders[orders[COL["id"]] == selected_id].iloc[0]
             
             # 클래스를 시간(분) 범위로 매핑하는 딕셔너리
@@ -579,20 +619,28 @@ with top_scope:
             else:
                 third_line_html = f"<h5 style='text-align: left; margin-top: -5px;'>{arrival_text}</h5>"
 
-            html_code = f"""
-            <div style="line-height: 1.0;">
-                <h3 style='text-align: left; font-weight: bold; margin-bottom: -20px;'>배달 예상 소요 시간</h3>
-                <h1 style='text-align: left; color: #1E90FF; margin-top: -20px;'>{time_range_str}</h1>
-                {third_line_html}
-            </div>
+            eta_inner_html = f"""
+                <div style="line-height: 1.0; padding: 12px 8px;">
+                    <h3 style='text-align: left; font-weight: bold; margin-bottom: -20px;'>배달 예상 소요 시간</h3>
+                    <h1 style='text-align: left; color: #1E90FF; margin-top: -20px;'>{time_range_str}</h1>
+                    {"<h4 style='text-align:left; color:#FF4B4B; margin-top:5px;'>" + error_text + "</h4>" if error_text
+                    else f"<h5 style='text-align:left; margin-top:-5px;'>{arrival_text}</h5>"}
+                    <p>주문하신 곳으로 가고 있어요. 🛵</p>
+                </div>
             """
-            st.markdown(html_code, unsafe_allow_html=True)
 
-            # 2. 상태 메시지 출력
-            st.write("주문하신 곳으로 가고 있어요. 🛵")
-            st.write("") 
+            # 카드 전체 클릭(hover 확대 + 클릭 시 이동)
+            selected_id_clean = str(selected_id)  # 이미 있으시면 그 변수 사용
+            eta_card = f"""
+                <div class="click-card" style="background:#ffffff; padding: 8px; border-radius:16px;">
+                <a class="cover-link" href="?to=prob&id={selected_id_clean}" aria-label="확률분포 상세보기"></a>
+                {eta_inner_html}
+                </div>
+            """
+            st.markdown(eta_card, unsafe_allow_html=True)
+            st.write("")
 
-            # 3. 가로 막대 그래프 생성 (시간대 텍스트만, 값 라벨 표시, x축 숨김)
+            # 2. 가로 막대 그래프 생성 (시간대 텍스트만, 값 라벨 표시, x축 숨김)
             chart_data = []
 
             pairs = [
@@ -716,19 +764,32 @@ with top_scope:
                 # 상세보기 버튼
                 st.session_state['selected_id'] = selected_id
                 st.markdown("""
-                <style>
-                .stButton button {
-                    background-color: #f0f2f6;
-                    color: #000000;
-                    border-radius: 20px;
-                    border: 1px solid #dcdcdc;
-                    padding: 10px 20px;
-                    font-size: 16px;
-                    font-weight: bold;
-                    width: 100%;
-                }
-                </style>
-                """, unsafe_allow_html=True)
+                    <style>
+                    .click-card {
+                        position: relative;
+                        border-radius: 16px;
+                        background: #ffffff;
+                        padding: 8px;
+                        box-shadow: 0 2px 8px rgba(0,0,0,0.06); /* 기본 그림자 */
+                        border: 1px solid rgba(0,0,0,0.05);     /* 기본 경계선 */
+                        transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+                        will-change: transform;
+                    }
+                    .click-card:hover {
+                        transform: scale(1.02);
+                        box-shadow: 0 10px 28px rgba(0,0,0,.12);
+                        border-color: rgba(0,0,0,0.15); /* hover 시 테두리 강조 */
+                    }
+                    .click-card .cover-link {
+                        position: absolute; inset: 0;
+                        z-index: 3;
+                        text-indent: -9999px;
+                    }
+                    .click-card, .click-card * { cursor: pointer; }
+                    .click-card * { pointer-events: none; }
+                    .click-card .cover-link { pointer-events: auto; }
+                    </style>
+                    """, unsafe_allow_html=True)
 
                 col1, col2, col3 = st.columns([1, 1, 1])
                 with col2:
@@ -739,18 +800,6 @@ with top_scope:
 
     # ---- 우: 변수 중요도 (박스 제거 + 세로 간격 줄임 + 칼럼명 볼드 제거 + 상세보기 버튼 중앙)
     with right_col:
-        html_code = """
-            <div style="line-height: 1.2;">
-                <h3 style='text-align: left; font-weight: bold; margin-bottom: -8px;'>
-                    변수 중요도
-                </h3>
-                <p style='text-align: left; color: #555; font-size:20px; margin-top: 0;'>
-                    예상시간에 영향을 끼치고 있는 변수들이에요.
-                </p>
-            </div>
-            """
-        st.markdown(html_code, unsafe_allow_html=True)
-
 
         @st.cache_data
         def load_fi_csv(path: str) -> pd.DataFrame:
@@ -775,36 +824,36 @@ with top_scope:
                 else:
                     row = row.iloc[0]
 
-                    use_cols = [
-                        ("distance_km",          "distance"),
-                        ("Weatherconditions",    "Weather"),
-                        ("region_city",          "region"),
-                        ("multiple_deliveries",  "multiple"),
-                        ("Road_traffic_density", "Traffic"),
-                    ]
+                use_cols = [
+                    ("distance_km",          "거리 🧭"),
+                    ("Weatherconditions",    "날씨 🌈"),
+                    ("region_city",          "지역 🏙️"),
+                    ("multiple_deliveries",  "배달 수 🏍️"),
+                    ("Road_traffic_density", "교통 🚗"),
+                ]
 
-                    chart_data = []
-                    for col, label in use_cols:
-                        if col not in df_fi.columns:
-                            continue
-                        val = row[col]
-                        if pd.isna(val):
-                            continue
-                        try:
-                            v = float(val)
-                        except Exception:
-                            continue
-                        v = v*100 if 0.0 <= v <= 1.0 else v
-                        v = max(0, min(v, 100))
-                        chart_data.append({"feature": label, "value": v})
+                chart_data = []
+                for col, label in use_cols:
+                    if col not in df_fi.columns:
+                        continue
+                    val = row[col]
+                    if pd.isna(val):
+                        continue
+                    try:
+                        v = float(val)
+                    except Exception:
+                        continue
+                    v = v*100 if 0.0 <= v <= 1.0 else v
+                    v = max(0, min(v, 100))
+                    chart_data.append({"feature": label, "value": v})
 
-                    if not chart_data:
-                        st.warning("표시할 변수 중요도 값이 없습니다.")
-                    else:
-                        import altair as alt
-                        chart_df = pd.DataFrame(chart_data)
-                        chart_df = chart_df.sort_values("value", ascending=False).reset_index(drop=True)
-                        
+                if not chart_data:
+                    st.warning("표시할 변수 중요도 값이 없습니다.")
+                else:
+                    import altair as alt
+                    chart_df = pd.DataFrame(chart_data)
+                    chart_df = chart_df.sort_values("value", ascending=False).reset_index(drop=True)
+
                     COLOR_TRACK = "#E9E7F3"
                     COLOR_FILL  = "#6C7F45"
                     COLOR_LABEL = "#111111"
@@ -817,8 +866,8 @@ with top_scope:
                     y_enc = alt.Y("feature:N", title=None, sort=y_order, axis=None)
 
                     # 세로 간격 더 좁게
-                    row_h = 24
-                    total_h = max(80, len(chart_df) * row_h)
+                    row_h = 40
+                    total_h = max(120, len(chart_df) * row_h)
 
                     # 왼쪽 라벨 (볼드 제거)
                     left_labels = (
@@ -826,7 +875,7 @@ with top_scope:
                         .mark_text(
                             align="right",
                             baseline="middle",
-                            fontSize=14,
+                            fontSize=20,
                             fontWeight="normal",
                             dx=5, 
                             color=COLOR_LABEL
@@ -836,44 +885,44 @@ with top_scope:
                     )
 
                     base = alt.Chart(chart_df).encode(y=y_enc)
-                    track = base.mark_bar(size=10, color=COLOR_TRACK, cornerRadius=999).encode(
+                    track = base.mark_bar(size=18, color=COLOR_TRACK, cornerRadius=999).encode(
                         x=alt.X("track:Q", scale=alt.Scale(domain=[0,100]), axis=None, title=None)
-                    ).properties(width=140, height=total_h)
-                    fill = base.mark_bar(size=10, color=COLOR_FILL, cornerRadius=999).encode(
+                    ).properties(width=200, height=total_h)
+                    fill = base.mark_bar(size=18, color=COLOR_FILL, cornerRadius=999).encode(
                         x=alt.X("value:Q", scale=alt.Scale(domain=[0,100]), axis=None, title=None)
-                    ).properties(width=140, height=total_h)
+                    ).properties(width=200, height=total_h)
 
                     middle = track + fill
 
                     right_values = (
                         alt.Chart(chart_df)
-                        .mark_text(align="left", baseline="middle", fontSize=14, fontWeight="bold", dx=6, color=COLOR_PCT)
+                        .mark_text(align="left", baseline="middle", fontSize=18, fontWeight="bold", dx=6, color=COLOR_PCT)
                         .encode(y=y_enc, text="pct_str:N")
                         .properties(width=10, height=total_h)
                     )
 
                     chart_comp = alt.hconcat(left_labels, middle, right_values).resolve_scale(y="shared")
-                    st.altair_chart(chart_comp, use_container_width=True)
-
-                    # 상세보기 버튼 (우)
+                    
                     st.session_state['selected_id'] = selected_id
-                    st.markdown("""
-                    <style>
-                    .stButton button {
-                        white-space: nowrap;           /* 줄바꿈 금지 */
-                        word-break: keep-all;          /* 한글도 단어 단위로 */
-                        background-color: #f0f2f6;
-                        color: #000000;
-                        border-radius: 20px;
-                        border: 1px solid #dcdcdc;
-                        padding: 10px 20px;
-                        font-size: 16px;
-                        font-weight: bold;
-                        width: 100%; max-width: 320px; /* 충분한 폭 고정 */
-                        display: block; margin: 6px auto; /* 가운데 정렬 */
-                    }
-                    </style>
-                    """, unsafe_allow_html=True)
+                    html_code = f"""
+                        <div class="click-card" style="background:#ffffff; padding: 8px; border-radius:16px;">
+                            <a class="cover-link" href="?to=fi&id={selected_id_clean}" aria-label="변수 중요도 상세보기"></a>
+                            <div style="line-height: 1.2;">
+                                <h3 style='text-align: left; font-weight: bold; margin-bottom: -8px;'>
+                                    변수 중요도
+                                </h3>
+                                <p style='text-align: left; color: #555; font-size:20px; margin-top: 0;'>
+                                    예상시간에 영향을 끼치고 있는 변수들이에요.
+                                </p>
+                            </div>
+                        </div>
+                    """
+                    st.markdown(html_code, unsafe_allow_html=True)
+                    
+                    st.write("")
+                    st.altair_chart(chart_comp, use_container_width=True)
+                    # 카드 닫기
+                    st.markdown("</div>", unsafe_allow_html=True)
 
                     c1, c2, c3 = st.columns([1,2,1])
                     with c2:
@@ -912,7 +961,7 @@ else:
         pickup_dt = order_dt + timedelta(minutes=prep_min)
     delivered_dt = (pickup_dt + timedelta(minutes=deliver_only_min)) if (pickup_dt and deliver_only_min is not None) \
                    else (order_dt + timedelta(minutes=total_min) if (order_dt and not np.isnan(total_min)) else None)
-    
+
     # --- 시뮬 시계 (3초=1분) ---
     if st.session_state.get("pipe_sim_id") != selected_id_clean or "sim_now" not in st.session_state:
         st.session_state["pipe_sim_id"] = selected_id_clean
@@ -1013,6 +1062,7 @@ else:
     <div class="step">
         <div class="step-title">현재 시각 (데이터 기준)</div>
         <div class="big-clock">{sim_now.strftime("%H:%M")}</div>
+        {peak_text_html}
     </div>
 
     <div class="step-wrap" style="margin-left:24px;margin-right:24px;">
@@ -1059,7 +1109,7 @@ else:
         st.session_state["done_banner_for"] = selected_id_clean
         show_top_overlay_between(start_id, end_id, minutes_text, ele_src)
 
-   # --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
+    # --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
     rerun_needed = False
     if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
         st.session_state["sim_now"] = sim_now + timedelta(minutes=1)
