@@ -22,10 +22,10 @@ st.set_page_config(page_title="배달 예측(메인)", layout="wide")
 # 🔝 타이틀 위 전용 슬롯
 FX_SLOT = st.container()
 
-st.title("🍳배달 예측 대시보드")
+st.title("🚚 Deliphant 배달 현황")
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
-MAPBOX_TOKEN   = ""
+MAPBOX_TOKEN   = "pk.eyJ1IjoieWVvbnd4IiwiYSI6ImNtZWFubWQ5NzB4NXoyanIwdG14cm5iNmgifQ.NVKLEskCMlElqXWr2BXyBw"
 target_ids = ['0x9d32', '0x23d4', '0x8b39', '0xce01', '0x8fdd', '0x7ab9', '0x6f80', '0xa512', '0xd740', '0xb478', '0xd200', '0x2a85', '0x1ef8', '0x972b']
 
 COL = {
@@ -48,7 +48,6 @@ COL = {
     "courier_age": "Delivery_person_Age",
     "courier_rating": "Delivery_person_Ratings",
 }
-
 
 ROAD_TRAFFIC_COLOR = {
     "low": "#1DB954",      # 초록
@@ -465,7 +464,6 @@ with top_scope:
     left_col, mid_col, right_col = st.columns([1.3, 1.0, 1.0])
     # ---- 좌: 지도 (실제 경로 + CSV 색상)
     with left_col:
-        st.subheader("배달 경로")
         if sel is None:
             st.info("주문을 선택하세요.")
         else:
@@ -499,7 +497,6 @@ with top_scope:
                 lngs = [lon for (lat, lon) in coords]
                 bounds = [[min(lats), min(lngs)], [max(lats), max(lngs)]]
                 m.fit_bounds(bounds, padding=(30, 30))  # 여백(px) 적당히 조절
-                            
                 # 간단 범례
                 import branca
                 legend = """
@@ -528,11 +525,9 @@ with top_scope:
     with mid_col:
         # 전체 orders 데이터프레임이 비어있지 않은 경우에만 실행
         if not orders.empty:
-            # **수정된 부분**: `st.selectbox`에서 선택된 ID에 맞는 행을 가져옵니다.
             target_row = orders[orders[COL["id"]] == selected_id].iloc[0]
             
             # 클래스를 시간(분) 범위로 매핑하는 딕셔너리
-            # 클래스를 시간(분) 범위로 매핑
             time_map = {
                 1.0: "10~14분", 1.5: "15~19분", 2.0: "20~24분",
                 2.5: "25~29분", 3.0: "30~34분", 3.5: "35~39분",
@@ -560,7 +555,6 @@ with top_scope:
                 time_range_str = f"{upper_bound_min}분 이내"          # "24분 이내"
             else:
                 time_range_str = "정보 없음"  # 또는 "계산 불가"
-
 
             # 1-2. 예상 도착 시각 (예: "오후 10시 33분 도착 예정") 또는 에러 메시지
             arrival_text = ""
@@ -768,48 +762,49 @@ with top_scope:
             feat_path = "data/feature_importance.csv"
             df_fi = load_fi_csv(feat_path)
         except Exception as e:
-            st.error(f"feature_importance.csv 로드 실패: {e}")
-            st.stop()
+            st.warning(f"feature_importance.csv 로드 실패: {e}  → 이 섹션만 숨기고 아래 콘텐츠는 계속 렌더합니다.")
+            df_fi = None
 
-        if "ID" not in df_fi.columns:
-            st.error("feature_importance.csv에 'ID' 컬럼이 없습니다.")
-        else:
-            row = df_fi[df_fi["ID"] == selected_id]
-            if row.empty:
-                st.warning("선택한 ID에 대한 변수 중요도 데이터가 없습니다.")
+        if df_fi is not None:
+            if "ID" not in df_fi.columns:
+                st.warning("feature_importance.csv에 'ID' 컬럼이 없어 변수 중요도 섹션만 건너뜁니다.")
             else:
-                row = row.iloc[0]
-
-                use_cols = [
-                    ("distance_km",          "distance"),
-                    ("Weatherconditions",    "Weather"),
-                    ("region_city",          "region"),
-                    ("multiple_deliveries",  "multiple"),
-                    ("Road_traffic_density", "Traffic"),
-                ]
-
-                chart_data = []
-                for col, label in use_cols:
-                    if col not in df_fi.columns:
-                        continue
-                    val = row[col]
-                    if pd.isna(val):
-                        continue
-                    try:
-                        v = float(val)
-                    except Exception:
-                        continue
-                    v = v*100 if 0.0 <= v <= 1.0 else v
-                    v = max(0, min(v, 100))
-                    chart_data.append({"feature": label, "value": v})
-
-                if not chart_data:
-                    st.warning("표시할 변수 중요도 값이 없습니다.")
+                row = df_fi[df_fi["ID"] == selected_id]
+                if row.empty:
+                    st.warning("선택한 ID에 대한 변수 중요도 데이터가 없습니다.")
                 else:
-                    import altair as alt
-                    chart_df = pd.DataFrame(chart_data)
-                    chart_df = chart_df.sort_values("value", ascending=False).reset_index(drop=True)
+                    row = row.iloc[0]
 
+                    use_cols = [
+                        ("distance_km",          "distance"),
+                        ("Weatherconditions",    "Weather"),
+                        ("region_city",          "region"),
+                        ("multiple_deliveries",  "multiple"),
+                        ("Road_traffic_density", "Traffic"),
+                    ]
+
+                    chart_data = []
+                    for col, label in use_cols:
+                        if col not in df_fi.columns:
+                            continue
+                        val = row[col]
+                        if pd.isna(val):
+                            continue
+                        try:
+                            v = float(val)
+                        except Exception:
+                            continue
+                        v = v*100 if 0.0 <= v <= 1.0 else v
+                        v = max(0, min(v, 100))
+                        chart_data.append({"feature": label, "value": v})
+
+                    if not chart_data:
+                        st.warning("표시할 변수 중요도 값이 없습니다.")
+                    else:
+                        import altair as alt
+                        chart_df = pd.DataFrame(chart_data)
+                        chart_df = chart_df.sort_values("value", ascending=False).reset_index(drop=True)
+                        
                     COLOR_TRACK = "#E9E7F3"
                     COLOR_FILL  = "#6C7F45"
                     COLOR_LABEL = "#111111"
@@ -893,7 +888,7 @@ with top_scope:
 
 # ========================= [BLOCK 8] 하단 파이프라인 (선택 주문) =========================
 st.markdown("---")
-# st.subheader("주문 파이프라인")
+# st.subheader("배달 현황")
 
 if sel is None:
     st.info("주문을 선택하세요.")
@@ -917,7 +912,7 @@ else:
         pickup_dt = order_dt + timedelta(minutes=prep_min)
     delivered_dt = (pickup_dt + timedelta(minutes=deliver_only_min)) if (pickup_dt and deliver_only_min is not None) \
                    else (order_dt + timedelta(minutes=total_min) if (order_dt and not np.isnan(total_min)) else None)
-
+    
     # --- 시뮬 시계 (3초=1분) ---
     if st.session_state.get("pipe_sim_id") != selected_id_clean or "sim_now" not in st.session_state:
         st.session_state["pipe_sim_id"] = selected_id_clean
@@ -1064,12 +1059,170 @@ else:
         st.session_state["done_banner_for"] = selected_id_clean
         show_top_overlay_between(start_id, end_id, minutes_text, ele_src)
 
-    # --- 3초마다 업데이트 ---
+   # --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
+    rerun_needed = False
     if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
         st.session_state["sim_now"] = sim_now + timedelta(minutes=1)
-        time.sleep(1)
-        st.rerun()
+        rerun_needed = True
 
 # ========================= [BLOCK 9] 주의사항 =========================
-st.caption("ℹ️ 경로는 Mapbox Directions(driving)로 계산된 '현재' 기준 도로 경로이며, 선 색상은 CSV의 Road_traffic_density 값을 그대로 반영합니다(실시간 교통 미사용).")
+st.caption("ℹ️ 경로는 Mapbox Directions(driving)로 계산된 '현재' 기준 도로 경로이며, 선 색상은 과거 도로 교통상황을 그대로 반영합니다.")
 
+
+# ========================= [BLOCK 10] 상황별 평균 배달소요시간 (요약 차트) =========================
+import plotly.express as px
+
+st.markdown("---")
+html_variables = """
+            <div style="line-height: 1.2;">
+                <h3 style='text-align: left; font-weight: bold; margin-bottom: -8px;'>
+                    상황별 평균 배달소요시간
+                </h3>
+                <p style='text-align: left; color: #555; font-size:20px; margin-top: 0;'>
+                    상황별로 과거에 평균적으로 소요된 배달 소요시간이에요.
+                </p>
+            </div>
+            """
+st.markdown(html_variables, unsafe_allow_html=True)
+st.write("")
+
+# Pastel palettes
+PASTEL_ORANGES = ["#FAD7A0", "#F9CB9C", "#FFD1A6", "#FDE2B6"]
+PASTEL_GREENS  = ["#CDECCF", "#BDE0C6", "#D4EDDA", "#C3E6CB"]
+
+from pathlib import Path
+DATA_DIR = Path(__file__).resolve().parent / "data"
+
+@st.cache_data(show_spinner=False)
+def load_summary_dfs(data_dir: Path):
+    dfs = {}
+    dfs["city"]      = pd.read_csv(data_dir / "mean_time_by_City.csv", encoding="utf-8-sig")
+    dfs["peak"]      = pd.read_csv(data_dir / "mean_time_by_Peak_flag.csv", encoding="utf-8-sig")
+    dfs["region"]    = pd.read_csv(data_dir / "mean_time_by_region.csv", encoding="utf-8-sig")
+    dfs["long"]      = pd.read_csv(data_dir / "mean_time_by_long_distance.csv", encoding="utf-8-sig")
+    dfs["weather"]   = pd.read_csv(data_dir / "mean_time_by_Weatherconditions.csv", encoding="utf-8-sig")
+    dfs["traffic"]   = pd.read_csv(data_dir / "mean_time_by_Road_traffic_density.csv", encoding="utf-8-sig")
+    dfs["multiple"]  = pd.read_csv(data_dir / "mean_time_by_multiple_deliveries.csv", encoding="utf-8-sig")
+    dfs["festival"]  = pd.read_csv(data_dir / "mean_time_by_Festival.csv", encoding="utf-8-sig")
+    return dfs
+
+def _boolify_if_binary(s: pd.Series) -> pd.Series:
+    vals = set(pd.Series(s).dropna().unique().tolist())
+    if vals.issubset({0, 1}) or vals.issubset({0.0, 1.0}) or vals.issubset({"0", "1"}) or vals.issubset({0, 1, 0.0, 1.0}):
+        return s.replace({0: False, 1: True, 0.0: False, 1.0: True, "0": False, "1": True})
+    return s
+
+def small_bar(
+    df: pd.DataFrame,
+    x_col: str,
+    y_col: str = "Time_real_mean",
+    title: str = "",
+    x_title: str = "",
+    y_title: str = "평균 소요시간(분)",
+    color: str | None = None,
+    horizontal: bool = False,
+    height: int = 300
+):
+    d = df.copy()
+    # x 이진값이면 불리언으로 표시
+    d[x_col] = _boolify_if_binary(d[x_col])
+    # 정렬 및 카테고리 순서 고정
+    d = d.sort_values(y_col, ascending=False)
+    d[x_col] = pd.Categorical(d[x_col], categories=d[x_col], ordered=True)
+    d["label_min"] = d[y_col].round().astype(int).astype(str) + "분"
+
+    if horizontal:
+        fig = px.bar(
+            d, x=y_col, y=x_col, orientation="h",
+            hover_data={y_col: ":.2f"},
+            title=title
+        )
+    else:
+        fig = px.bar(
+            d, x=x_col, y=y_col, text="label_min",
+            hover_data={y_col: ":.2f"},
+            title=title
+        )
+
+    if color:
+        fig.update_traces(marker_color=color, marker_line_color="rgba(0,0,0,0.08)", marker_line_width=1)
+
+    # 라벨/폰트/여백
+    fig.update_traces(texttemplate="%{text}", textposition="inside", textfont_size=14, cliponaxis=False)
+    if horizontal:
+        xmax = float(d[y_col].max())
+        fig.update_xaxes(range=[0, xmax * 1.25], tickfont=dict(size=11), title_font=dict(size=13), title=y_title)
+        fig.update_yaxes(tickfont=dict(size=11), title_font=dict(size=13), title=x_title)
+    else:
+        ymax = float(d[y_col].max())
+        fig.update_xaxes(tickfont=dict(size=11), title_font=dict(size=13), title=x_title)
+        fig.update_yaxes(range=[0, ymax * 1.25], tickfont=dict(size=11), title_font=dict(size=13), title=y_title)
+
+    fig.update_layout(
+        title=dict(x=0.5, xanchor="center"),
+        title_font=dict(size=16),
+        margin=dict(l=40, r=20, t=50, b=40),
+        height=height
+    )
+    return fig
+
+_sum = load_summary_dfs(DATA_DIR)
+
+# 1행(주황 계열)
+r1 = st.columns(4)
+with r1[0]:
+    st.plotly_chart(
+        small_bar(_sum["city"], x_col="City", title="도시유형별 평균 배달소요시간",
+                  x_title="도시 유형", color=PASTEL_ORANGES[0]),
+        use_container_width=True
+    )
+with r1[1]:
+    st.plotly_chart(
+        small_bar(_sum["peak"], x_col="Peak_flag", title="피크타임 평균 배달소요시간",
+                  x_title="피크타임 여부", color=PASTEL_ORANGES[1]),
+        use_container_width=True
+    )
+with r1[2]:
+    st.plotly_chart(
+        small_bar(_sum["region"], x_col="region", title="지역별 평균 배달소요시간",
+                  x_title="지역", horizontal=True, color=PASTEL_ORANGES[2]),
+        use_container_width=True
+    )
+with r1[3]:
+    st.plotly_chart(
+        small_bar(_sum["long"], x_col="long_distance", title="장거리(10km이상) 평균 배달소요시간",
+                  x_title="장거리 여부", color=PASTEL_ORANGES[3]),
+        use_container_width=True
+    )
+
+# 2행(초록 계열)
+r2 = st.columns(4)
+with r2[0]:
+    st.plotly_chart(
+        small_bar(_sum["weather"], x_col="Weatherconditions", title="날씨별 평균 배달소요시간",
+                  x_title="날씨", color=PASTEL_GREENS[0]),
+        use_container_width=True
+    )
+with r2[1]:
+    st.plotly_chart(
+        small_bar(_sum["traffic"], x_col="Road_traffic_density", title="교통상황별 평균 배달소요시간",
+                  x_title="교통상황", color=PASTEL_GREENS[1]),
+        use_container_width=True
+    )
+with r2[2]:
+    st.plotly_chart(
+        small_bar(_sum["multiple"], x_col="multiple_deliveries", title="동시배달 수 평균 배달소요시간",
+                  x_title="동시배달 수", color=PASTEL_GREENS[2]),
+        use_container_width=True
+    )
+with r2[3]:
+    st.plotly_chart(
+        small_bar(_sum["festival"], x_col="Festival", title="축제기간 평균 배달소요시간",
+                  x_title="축제 여부", color=PASTEL_GREENS[3]),
+        use_container_width=True
+    )
+
+
+if 'rerun_needed' in locals() and rerun_needed:
+    time.sleep(3)
+    st.rerun()
