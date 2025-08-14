@@ -25,7 +25,7 @@ FX_SLOT = st.container()
 st.title("🚚 Deliphant 배달 현황")
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
-MAPBOX_TOKEN   = "pk.eyJ1IjoieWVvbnd4IiwiYSI6ImNtZWFubWQ5NzB4NXoyanIwdG14cm5iNmgifQ.NVKLEskCMlElqXWr2BXyBw"
+MAPBOX_TOKEN   = ""
 target_ids = ['0x9d32', '0x23d4', '0x8b39', '0xce01', '0x8fdd', '0x7ab9', '0x6f80', '0xa512', '0xd740', '0xb478', '0xd200', '0x2a85', '0x1ef8', '0x972b']
 
 COL = {
