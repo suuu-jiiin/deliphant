@@ -114,7 +114,7 @@ if not id_data.empty:
         y=[max(prob_density) * 1.2] * len(prob_values),
         width=bin_width,
         customdata=np.stack([prob_values, bar_labels], axis=-1),
-        hovertemplate="<b>%{customdata[1]}</b><br>도착확률: %{customdata[0]:.1%}<extra></extra>",
+        hovertemplate="<b>%{customdata[1]}                   </b><br>도착확률: %{customdata[0]:.1%}<extra></extra>",
         marker=dict(color='rgba(0,0,0,0)'), # 완전히 투명하게
         name=''
     ))
