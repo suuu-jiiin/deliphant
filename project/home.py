@@ -406,8 +406,8 @@ elif not np.isnan(total_min):
     n_min = int(round(total_min))
 
 ####### 오버레이 함수
-def show_top_overlay_between(start_id: str, end_id: str, minutes_text: str, ele_data_url: str = ""):
-    # components.html 안에서 parent 문서를 건드려서(동일 출처) body에 고정 오버레이를 붙입니다.
+def show_top_overlay_full(minutes_text: str, ele_data_url: str = "", auto_close_ms: int | None = None):
+    """화면 전체를 덮는 오버레이 + 중앙 카드 (클릭/ESC로 닫힘)."""
     card_html = f"""
     <div style="
       background: rgba(0,0,0,0.65);
@@ -423,67 +423,46 @@ def show_top_overlay_between(start_id: str, end_id: str, minutes_text: str, ele_
       <div style="font-size:13px; opacity:.85; font-weight:600;">(화면을 클릭하면 닫혀요)</div>
     </div>
     """
+
     components.html(f"""
     <div></div>
     <script>
     (function(){{
-      const startId = "{start_id}";
-      const endId   = "{end_id}";
+      const doc = window.parent?.document || document;
 
-      function mount(){{
-        const doc = window.parent?.document || document;
-        const s = doc.getElementById(startId);
-        const e = doc.getElementById(endId);
-        if(!s || !e) {{ setTimeout(mount, 120); return; }}
-
-        const r1 = s.getBoundingClientRect();
-        const r2 = e.getBoundingClientRect();
-        const top = r1.top + window.parent.scrollY;
-        const height = (r2.bottom + window.parent.scrollY) - top;
-
-        let ov = doc.getElementById("dlp-top-overlay");
-        if(!ov){{
-          ov = doc.createElement("div");
-          ov.id = "dlp-top-overlay";
-          doc.body.appendChild(ov);
-          // 기본 스타일 + 페이드인
-          Object.assign(ov.style, {{
-            position: "fixed",
-            left: "0px",
-            top: top + "px",
-            width: "100vw",
-            height: height + "px",
-            background: "rgba(0,0,0,0.60)",
-            zIndex: "999999",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            transition: "opacity .18s ease",
-            opacity: "0"
-          }});
-          // 다음 프레임에 불투명
-          requestAnimationFrame(() => ov.style.opacity = "1");
-        }} else {{
-          ov.style.top = top + "px";
-          ov.style.height = height + "px";
-        }}
-
-        ov.innerHTML = `{card_html.replace("`","\\`")}`;
-
-        // ===== 닫기 핸들러 =====
-        const remove = () => {{
-          ov.style.opacity = "0";
-          setTimeout(() => ov && ov.remove && ov.remove(), 200);
-        }};
-        ov.onclick = remove;  // 화면 어느 곳을 클릭해도 닫힘
-        doc.addEventListener("keydown", (ev) => {{
-          if (ev.key === "Escape") remove();
-        }}, {{ once: true }});
-
-        // (선택) 자동 닫기 원하면 주석 해제
-        // setTimeout(remove, 4000);
+      // 기존 것이 있으면 재사용
+      let ov = doc.getElementById("dlp-top-overlay");
+      if(!ov){{
+        ov = doc.createElement("div");
+        ov.id = "dlp-top-overlay";
+        doc.body.appendChild(ov);
+        Object.assign(ov.style, {{
+          position: "fixed",
+          left: "0px",
+          top: "0px",
+          width: "100vw",
+          height: "100vh",                // ★ 화면 전체 덮기
+          background: "rgba(0,0,0,0.60)", // ★ 반투명 검정 전면
+          zIndex: "999999",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "opacity .18s ease",
+          opacity: "0"
+        }});
+        requestAnimationFrame(() => ov.style.opacity = "1");
       }}
-      mount();
+
+      ov.innerHTML = `{card_html.replace("`","\\`")}`;
+
+      const remove = () => {{
+        ov.style.opacity = "0";
+        setTimeout(() => ov && ov.remove && ov.remove(), 200);
+      }};
+      ov.onclick = remove;
+      doc.addEventListener("keydown", (ev) => {{ if (ev.key === "Escape") remove(); }}, {{ once: true }});
+
+      { f"setTimeout(remove, {auto_close_ms});" if auto_close_ms else "" }
     }})();
     </script>
     """, height=0)
@@ -1107,7 +1086,7 @@ else:
     minutes_text = str(n_min if n_min is not None else "예상")
     if delivered_done and (st.session_state.get("done_banner_for") != selected_id_clean):
         st.session_state["done_banner_for"] = selected_id_clean
-        show_top_overlay_between(start_id, end_id, minutes_text, ele_src)
+        show_top_overlay_full(minutes_text="25", ele_data_url=ele_src)
 
     # --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
     rerun_needed = False
