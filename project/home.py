@@ -1,10 +1,7 @@
-# app_main_local_density_route.py
-# 단일 주문 선택 → CSV Road_traffic_density 색상으로 "실제 도로 경로" 표시 (Mapbox driving, no traffic)
-# 업로드 UI 없음, 로컬 CSV 사용, 하단 파이프라인 유지
-
 # ========================= [BLOCK 1] 기본 설정 & 라이브러리 =========================
 import folium
 import time
+import textwrap
 import requests
 import pandas as pd
 import numpy as np
@@ -26,7 +23,6 @@ st.set_page_config(page_title="배달 예측(메인)", layout="wide")
 FX_SLOT = st.container()
 
 st.title("🐘 Deliphant 배달 현황")
-
 ######### 페이지 변환 네비게이션 ########3
 qp = st.query_params
 to = qp.get("to")
@@ -69,8 +65,10 @@ COL = {
     "courier_id": "Delivery_person_ID",
     "courier_age": "Delivery_person_Age",
     "courier_rating": "Delivery_person_Ratings",
+    "city":"City",
+    "long":"long_distance",
+    "weather":"Weatherconditions"
 }
-
 
 ROAD_TRAFFIC_COLOR = {
     "low": "#1DB954",      # 초록
@@ -175,107 +173,188 @@ def fetch_route_mapbox_geometry(start_lat, start_lng, end_lat, end_lng, token: s
     return {"distance_m": distance_m, "duration_s": duration_s, "coords_latlon": coords_latlon}
 
 # ================================ [BLOCK 5] 주문 선택 ==================================
-st.markdown("### 🔎 주문 선택 & 정보")
 
-# ID 컬럼 먼저 정규화(앞뒤 공백/눈에 안 보이는 공백 제거)
-def clean_id(x: object) -> str:
+def clean_id(x):
     s = str(x)
-    # 흔한 보이지 않는 공백 제거(\u00A0=non-breaking space, \ufeff=BOM, \u200b=zero-width space)
-    s = s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "")
-    return s.strip()
+    return s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "").strip()
 
-# 좌우로 분할: 왼쪽(좁게) = 주문 선택, 오른쪽(넓게) = 매장/배달원 정보
-sel_left, sel_right = st.columns([1.0, 2.2])
+def to_int_or_none(v):
+    try:
+        if pd.isna(v):
+            return None
+        return int(float(v))
+    except:
+        return None
 
-with sel_left:
-    orders[COL["id"]] = orders[COL["id"]].apply(clean_id)
-    order_ids = orders[COL["id"]].tolist()
-    default_idx = len(order_ids) - 1 if order_ids else 0
-    selected_id = st.selectbox("주문 ID", order_ids, index=len(order_ids) - 1 if order_ids else 0, format_func=lambda x: clean_id(x))
+def to_float_or_none(v):
+    try:
+        if pd.isna(v):
+            return None
+        return float(v)
+    except:
+        return None
 
-# 선택된 행
-selected_id_clean = clean_id(selected_id)
-sel = orders[orders[COL["id"]] == selected_id_clean].iloc[0] if order_ids else None
-st.session_state["selected_id"] = selected_id_clean
+# --- 레이아웃: 주문ID / 매장정보 / 배달원정보 / 특이사항 ---
+col_id, col_store, col_courier, col_special = st.columns([0.8, 1.0, 1.2, 1.5])
 
-with sel_right:
-    # 값 준비
-    if sel is None:
-        region = rname = courier_id = courier_age = courier_rating = "—"
-    else:
-        region = sel.get(COL["region"], "—") if COL["region"] in sel else "—"
-        rname  = sel.get(COL["restaurant_name"], "—") if COL["restaurant_name"] in sel else "—"
+orders[COL["id"]] = orders[COL["id"]].apply(clean_id)
+order_ids = orders[COL["id"]].tolist()
+default_idx = len(order_ids) - 1 if order_ids else 0
+selected_id_clean = None
+sel = None
 
-        courier_id_raw     = sel.get(COL["courier_id"], "—") if COL["courier_id"] in sel else "—"
-        courier_age_raw    = sel.get(COL["courier_age"], "—") if COL["courier_age"] in sel else "—"
-        courier_rating_raw = sel.get(COL["courier_rating"], "—") if COL["courier_rating"] in sel else "—"
+# ===== 주문 ID =====
+with col_id:
+    selected_id = st.selectbox(
+        "주문 ID",
+        order_ids,
+        index=default_idx,
+        format_func=clean_id
+    )
+    selected_id_clean = clean_id(selected_id)
+    sel = orders[orders[COL["id"]] == selected_id_clean].iloc[0] if order_ids else None
+    st.session_state["selected_id"] = selected_id_clean
 
-        # 나이 → 연령대 변환
-        try:
-            age_int = int(float(courier_age_raw)) if pd.notna(courier_age_raw) else None
-            if age_int is not None:
-                decade = (age_int // 10) * 10
-                courier_age = f"{decade}대"
-            else:
-                courier_age = "—"
-        except Exception:
-            courier_age = "—"
+# ===== 매장정보 =====
+with col_store:
+    region = sel.get(COL["region"], "—") if sel is not None else "—"
+    rname  = sel.get(COL["restaurant_name"], "—") if sel is not None else "—"
 
+    st.markdown(
+        f"""
+        <div style="background:#f2f2f2; padding:10px 12px; border-radius:8px;
+                    display:flex; flex-direction:column; justify-content:flex-start;">
+          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">🍽️ 매장 정보</div>
+          <div style="display:grid; gap:6px;">
+            <div style="background:#fff; border:1px solid #e3e3e3; border-radius:6px; padding:6px 8px;">
+              <div style="color:#70757a; font-size:12px; font-weight:600;">지역</div>
+              <div style="font-size:14px; font-weight:600;">{region}</div>
+            </div>
+            <div style="background:#fff; border:1px solid #e3e3e3; border-radius:6px; padding:6px 8px;">
+              <div style="color:#70757a; font-size:12px; font-weight:600;">매장명</div>
+              <div style="font-size:14px; font-weight:600;">{rname}</div>
+            </div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-        try:
-            courier_rating = round(float(courier_rating_raw), 2) if pd.notna(courier_rating_raw) else "—"
-        except Exception:
-            courier_rating = courier_rating_raw if str(courier_rating_raw).strip().lower() != "nan" else "—"
+# ===== 배달원 정보 (중간) =====
+with col_courier:
+    if sel is not None:
+        courier_id_raw     = sel.get(COL["courier_id"], "—")
+        courier_age_raw    = sel.get(COL["courier_age"], None)
+        courier_rating_raw = sel.get(COL["courier_rating"], None)
+
+        age_int = to_int_or_none(courier_age_raw)
+        courier_age = f"{(age_int // 10) * 10}대" if age_int is not None else "—"
+
+        rating_f = to_float_or_none(courier_rating_raw)
+        courier_rating = round(rating_f, 2) if rating_f is not None else "—"
 
         courier_id = courier_id_raw if str(courier_id_raw).strip() else "—"
+    else:
+        courier_id = courier_age = courier_rating = "—"
 
-    # 회색 박스 하나만 렌더
-    panel_html = f"""
-    <style>
-      .info-panel {{
-        background:#f2f2f2; padding:16px 18px; border-radius:10px;
-      }}
-      .section-title {{ margin:0 0 10px 0; font-weight:700; font-size:20px; }}
-      .grid-2 {{ display:grid; grid-template-columns: 1fr 2fr; gap:12px; }}
-      .grid-3 {{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }}
-      .info-card {{
-        background:#ffffff; border:1px solid #e3e3e3; border-radius:8px; padding:10px 12px;
-      }}
-      .label {{ color:#70757a; font-size:14px; font-weight:600; margin-bottom:4px; }}
-      .value {{ font-size:15x; font-weight:700; }}
-    </style>
+    st.markdown(
+        f"""
+        <style>
+          /* 2칼럼 그리드 (폭 좁아지면 자동 1열) */
+          @media (min-width: 720px) {{
+            .two-col-grid {{ display:grid; grid-template-columns: 1fr 1fr; gap:6px; }}
+          }}
+          @media (max-width: 719px) {{
+            .two-col-grid {{ display:grid; grid-template-columns: 1fr; gap:6px; }}
+          }}
+          .card {{ background:#fff; border:1px solid #e3e3e3; border-radius:6px; padding:6px 8px; }}
+          .label {{ color:#70757a; font-size:12px; font-weight:600; margin-bottom:2px; }}
+          .value {{ font-size:14px; font-weight:600; }}
+        </style>
 
-    <div class="info-panel">
-      <div class="section-title">🍽️ 매장 정보</div>
-      <div class="grid-2" style="margin-bottom:14px;">
-        <div class="info-card">
-          <div class="label">지역</div>
-          <div class="value">{region}</div>
-        </div>
-        <div class="info-card">
-          <div class="label">매장명</div>
-          <div class="value">{rname}</div>
-        </div>
-      </div>
+        <div style="background:#f2f2f2; padding:10px 12px; border-radius:8px;
+                    display:flex; flex-direction:column; justify-content:flex-start;">
+          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">🛵 배달원 정보</div>
 
-      <div class="section-title">🛵 배달원 정보</div>
-      <div class="grid-3">
-        <div class="info-card">
-          <div class="label">배달원 ID</div>
-          <div class="value">{courier_id}</div>
+          <!-- 1행: ID (풀폭) -->
+          <div class="card" style="margin-bottom:6px;">
+            <div class="label">배달원 ID</div>
+            <div class="value">{courier_id}</div>
+          </div>
+
+          <!-- 2행: 나이 | 평점 (2칼럼) -->
+          <div class="two-col-grid">
+            <div class="card">
+              <div class="label">나이</div>
+              <div class="value">{courier_age}</div>
+            </div>
+            <div class="card">
+              <div class="label">평점</div>
+              <div class="value">{courier_rating}</div>
+            </div>
+          </div>
         </div>
-        <div class="info-card">
-          <div class="label">나이</div>
-          <div class="value">{courier_age}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# ===== 특이사항 =====
+with col_special:
+    if sel is not None:
+        city    = str(sel.get(COL["city"], "")).strip()
+        peak    = sel.get(COL["peak_flag"], None)
+        road    = str(sel.get(COL["traffic"], "")).strip()
+        fest    = str(sel.get(COL["festival"], "")).strip()
+        longd   = sel.get(COL["long"], None)
+        weather = str(sel.get(COL["weather"], "")).strip()
+
+        notes = []
+        if city.lower() == "semi-urban":
+            notes.append("🏙️ 평균적으로 배달이 오래 걸리는 지역이에요.")
+        if to_int_or_none(peak) == 1:
+            notes.append("⏰ 피크타임이어서 배달이 늦어지고 있어요.")
+        if road.lower() == "jam":
+            notes.append("🚗🚗 도로 정체로 배달이 늦어지고 있어요.")
+        elif road.lower() == "high":
+            notes.append("🚙 도로 혼잡으로 배달이 늦어지고 있어요.")
+        if fest.lower() == "yes":
+            notes.append("🎉 축제기간이라 배달이 늦어요.")
+        if to_int_or_none(longd) == 1:
+            notes.append("📍 10km 이상 장거리 배달이에요.")
+
+        weather_mapping = {
+            "cloudy": "☁️ 현재 비가 오고 있어 배달이 늦어질 수 있어요.",
+            "fog": "🌫️ 현재 안개가 껴 있어 배달이 늦어질 수 있어요.",
+            "windy": "💨 현재 강풍이 불고 있어요.",
+            "stormy": "⛈️ 현재 폭우가 내리고 있어요.",
+            "sandstorms": "🌪️ 현재 모래폭풍이 불고 있어요.",
+            "sunny": "☀️ 현재 날씨는 맑음이에요."
+        }
+
+        if weather:
+            weather_key = weather.lower()
+            if weather_key in weather_mapping:
+                notes.append(weather_mapping[weather_key])
+
+
+    else:
+        notes = []
+
+    if notes:
+        li_html = "".join([f"<li style='margin:2px 0; font-size:13px; font-weight:600;'>{n}</li>" for n in notes])
+    else:
+        li_html = "<li style='margin:2px 0; color:#777; font-size:13px;'>표시할 특이사항이 없어요.</li>"
+
+    st.markdown(
+        f"""
+        <div style="background:#f2f2f2; padding:10px 12px; border-radius:8px;
+                    display:flex; flex-direction:column; justify-content:flex-start;">
+          <div style="font-weight:700; font-size:16px; margin-bottom:6px;">📝 특이사항</div>
+          <ul style="padding-left:18px; margin:0;">{li_html}</ul>
         </div>
-        <div class="info-card">
-          <div class="label">평점</div>
-          <div class="value">{courier_rating}</div>
-        </div>
-      </div>
-    </div>
-    """
-    st.markdown(panel_html, unsafe_allow_html=True)
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ========================= [BLOCK 6] 축제 및 피크 시간대 경고 =========================
 def trigger_fireworks(duration_sec: float = 2.5, height: int = 120):
@@ -526,7 +605,6 @@ with top_scope:
                 lngs = [lon for (lat, lon) in coords]
                 bounds = [[min(lats), min(lngs)], [max(lats), max(lngs)]]
                 m.fit_bounds(bounds, padding=(30, 30))  # 여백(px) 적당히 조절
-                            
                 # 간단 범례
                 import branca
                 legend = """
@@ -555,7 +633,6 @@ with top_scope:
     with mid_col:
         # 전체 orders 데이터프레임이 비어있지 않은 경우에만 실행
         if not orders.empty:
-            # **수정된 부분**: `st.selectbox`에서 선택된 ID에 맞는 행을 가져옵니다.
             target_row = orders[orders[COL["id"]] == selected_id].iloc[0]
             
             # 클래스를 시간(분) 범위로 매핑하는 딕셔너리
@@ -888,7 +965,6 @@ with top_scope:
                     )
 
                     chart_comp = alt.hconcat(left_labels, middle, right_values).resolve_scale(y="shared")
-                    
                     st.session_state['selected_id'] = selected_id
                     html_code = f"""
                         <div class="click-card" style="background:#ffffff; padding: 8px; border-radius:16px;">
@@ -938,7 +1014,7 @@ else:
         pickup_dt = order_dt + timedelta(minutes=prep_min)
     delivered_dt = (pickup_dt + timedelta(minutes=deliver_only_min)) if (pickup_dt and deliver_only_min is not None) \
                    else (order_dt + timedelta(minutes=total_min) if (order_dt and not np.isnan(total_min)) else None)
-
+    
     # --- 시뮬 시계 (3초=1분) ---
     if st.session_state.get("pipe_sim_id") != selected_id_clean or "sim_now" not in st.session_state:
         st.session_state["pipe_sim_id"] = selected_id_clean
@@ -1039,7 +1115,6 @@ else:
     <div class="step">
         <div class="step-title">현재 시각 (데이터 기준)</div>
         <div class="big-clock">{sim_now.strftime("%H:%M")}</div>
-        {peak_text_html}
     </div>
 
     <div class="step-wrap" style="margin-left:24px;margin-right:24px;">
