@@ -166,37 +166,25 @@ def clean_id(x: object) -> str:
     s = s.replace("\u00A0", " ").replace("\ufeff", "").replace("\u200b", "")
     return s.strip()
 
-orders[COL["id"]] = orders[COL["id"]].apply(clean_id)
-
-# 선택지에도 정규화 적용
-order_ids = orders[COL["id"]].tolist()
-
-# 선택박스 표시 시에도 strip된 형태로 보이도록(안전)
-selected_id = st.selectbox(
-    "주문 ID", 
-    order_ids, 
-    index=len(order_ids) - 1 if order_ids else 0,
-    format_func=lambda x: clean_id(x)
-)
-
-# 선택값 정규화해서 세션에 저장
-selected_id_clean = clean_id(selected_id)
-st.session_state["selected_id"] = selected_id_clean
-
-# # 사용할 때도 정규화값으로 비교
-# sel_mask = orders[COL["id"]].apply(clean_id) == selected_id_clean
-# sel = orders.loc[sel_mask].iloc[0] if sel_mask.any() else None
-
 # 좌우로 분할: 왼쪽(좁게) = 주문 선택, 오른쪽(넓게) = 매장/배달원 정보
 sel_left, sel_right = st.columns([1.0, 2.2])
 
 with sel_left:
-    order_ids = orders[COL["id"]].tolist() if COL["id"] in orders.columns else []
+    orders[COL["id"]] = orders[COL["id"]].apply(clean_id)
+    order_ids = orders[COL["id"]].tolist()
     default_idx = len(order_ids) - 1 if order_ids else 0
-    selected_id = st.selectbox("주문 ID", order_ids, index=default_idx)
+    selected_id = st.selectbox(
+    "주문 ID", 
+    order_ids, 
+    index=len(order_ids) - 1 if order_ids else 0,
+    format_func=lambda x: clean_id(x),
+    key="order_id_select_main"   # ← 고유 key 추가
+)
 
-# 선택된 행
-sel = orders[orders[COL["id"]] == selected_id].iloc[0] if order_ids else None
+    # 선택된 행
+    sel = orders[orders[COL["id"]] == selected_id].iloc[0] if order_ids else None
+    selected_id_clean = clean_id(selected_id)
+    st.session_state["selected_id"] = selected_id_clean
 
 with sel_right:
     # 값 준비
@@ -235,14 +223,14 @@ with sel_right:
       .info-panel {{
         background:#f2f2f2; padding:16px 18px; border-radius:10px;
       }}
-      .section-title {{ margin:0 0 10px 0; font-weight:700; font-size:30px; }}
+      .section-title {{ margin:0 0 10px 0; font-weight:700; font-size:20px; }}
       .grid-2 {{ display:grid; grid-template-columns: 1fr 2fr; gap:12px; }}
       .grid-3 {{ display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; }}
       .info-card {{
         background:#ffffff; border:1px solid #e3e3e3; border-radius:8px; padding:10px 12px;
       }}
-      .label {{ color:#70757a; font-size:18px; font-weight:600; margin-bottom:4px; }}
-      .value {{ font-size:20px; font-weight:700; }}
+      .label {{ color:#70757a; font-size:14px; font-weight:600; margin-bottom:4px; }}
+      .value {{ font-size:15x; font-weight:700; }}
     </style>
 
     <div class="info-panel">
