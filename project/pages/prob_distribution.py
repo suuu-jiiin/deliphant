@@ -16,7 +16,7 @@ if not selected_id:
     st.stop()
 
 id_value = clean_id(selected_id)
-st.set_page_config(page_title="확률분포 상세페이지", layout="centered")
+st.set_page_config(page_title="확률분포 상세페이지", layout="wide")
 st.markdown("""
 <style>
 .page-title {
