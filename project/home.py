@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 from utils.paths import LOCAL_CSV_PATH
 
-st.set_page_config(page_title="배달 예측(메인)", layout="wide")
+st.set_page_config(page_title="🐘 Deliphant: 설명가능한AI 배달예측", layout="wide")
 # 🔝 타이틀 위 전용 슬롯
 FX_SLOT = st.container()
 
@@ -43,7 +43,7 @@ elif to == "fi":
 
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
-MAPBOX_TOKEN   = ""
+MAPBOX_TOKEN   = "pk.eyJ1IjoieWVvbnd4IiwiYSI6ImNtZWI0amVmeDE1b28ybXM4MDJrNG85aGgifQ.j-A2Du6kaSYyJF28vA7BWA"
 target_ids = ['0x9d32', '0x23d4', '0x8b39', '0xce01', '0x8fdd', '0x7ab9', '0x6f80', '0xa512', '0xd740', '0xb478', '0xd200', '0x2a85', '0x1ef8', '0x972b']
 
 COL = {
