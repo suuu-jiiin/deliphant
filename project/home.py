@@ -893,7 +893,7 @@ with top_scope:
 
 # ========================= [BLOCK 8] 하단 파이프라인 (선택 주문) =========================
 st.markdown("---")
-st.subheader("주문 파이프라인")
+# st.subheader("주문 파이프라인")
 
 if sel is None:
     st.info("주문을 선택하세요.")
@@ -980,77 +980,83 @@ else:
     pipeline_html = f"""
     <style>
     .pipeline-container {{
-        display:flex;justify-content:space-between;align-items:center;
+        display:flex;justify-content:space-between;align-items:center; overflow: visible; padding-top:50px;
+
     }}
+
     .step-wrap{{
-    display: flex;align-items: center;justify-content: space-between;gap: 80px;margin-top: 10px;margin-bottom: 10px;flex: 1;}}
-    .step{{text-align:center;flex-shrink:0}}
+    display:flex;align-items:center;justify-content:space-between;gap:40px;
+    margin-top:10px;margin-bottom:10px;flex:1;overflow: visible;
+    }}
+    .step{{text-align:center;flex-shrink:0;overflow: visible;}}
     .badge{{width:82px;height:82px;border-radius:50%;background:#5A754D;color:white;
-           display:flex;align-items:center;justify-content:center;font-weight:800;font-size:28px;
-           box-shadow:inset -6px -6px 0 rgba(0,0,0,0.15)}}
+        display:flex;align-items:center;justify-content:center;font-weight:800;font-size:28px;
+        box-shadow:inset -6px -6px 0 rgba(0,0,0,0.15)}}
     .badge-empty{{width:82px;height:82px;border-radius:50%;border:10px solid #5A615D;background:#fff}}
+
     .line{{height:10px;background:#5A615D;flex:1;position:relative}}
+    .line-short{{flex:0 0 35px}} 
+
     .step-title{{font-size:20px;font-weight:700;margin-bottom:6px}}
     .step-sub{{color:#8B8F90;font-size:16px;min-height:22px;margin-top:8px}}
     .big-clock{{font-size:48px;color:#5A754D;font-weight:900;margin:0}}
 
-    /* 게이지 & 오토바이 */
-    .progress-wrap{{position:relative;min-width:360px;}}
+    /* ▶ 진행바 영역 넓히기 */
+    .progress-wrap{{position:relative;flex:3;min-width:420px;overflow: visible;}}  
     .progress-track{{position:relative;height:20px;background:#E9ECEB;border-radius:7px;overflow:hidden}}
     .progress-fill{{height:100%;background:#E07A18;width:{progress_percent}%;transition:width 0.5s linear}}
-    /* 게이지 바로 위에 붙임 */
-    .progress-bike-img{{position:absolute;left:{progress_percent}%;bottom:100%;
-                        transform:translateX(-50%);height:70px;width:auto;transition:left 0.5s linear;}}
-    .progress-bike-emoji{{position:absolute;left:{progress_percent}%;bottom:100%;
-                          transform:translateX(-50%);font-size:28px;line-height:1;transition:left 0.5s linear;}}
-    .progress-label {{text-align:center;font-weight:500;margin-top:10px;}}
 
+    /* 게이지 위 오토바이 */
+    .progress-bike-img{{position:absolute;left:{progress_percent}%;bottom:100%;
+                        transform:translateX(-50%);height:130px;width:auto;transition:left 0.5s linear;}}
+    .progress-bike-emoji{{position:absolute;left:{progress_percent}%;bottom:100%;
+                        transform:translateX(-50%);font-size:28px;line-height:1;transition:left 0.5s linear;}}
+    .progress-label {{text-align:center;font-weight:500;margin-top:10px;}}
     </style>
 
     <div class="pipeline-container">
-      <div class="step">
+    <div class="step">
         <div class="step-title">현재 시각 (데이터 기준)</div>
         <div class="big-clock">{sim_now.strftime("%H:%M")}</div>
-      </div>
+    </div>
 
-      <div class="step-wrap" style="margin-left:24px;margin-right:24px;">
+    <div class="step-wrap" style="margin-left:24px;margin-right:24px;">
         <!-- 주문 수락 -->
         <div class="step">
-          <div class="step-title">주문 수락됨</div>
-          {accepted_badge}
-          <div class="step-sub">{ot_str}</div>
+        <div class="step-title">주문 수락됨</div>
+        {accepted_badge}
+        <div class="step-sub">{ot_str}</div>
         </div>
 
-        <div class="line"></div>
+        <div class="line line-short"></div>
 
         <!-- 메뉴 준비 -->
         <div class="step">
-          <div class="step-title">메뉴 준비</div>
-          {prepared_badge}
-          <div class="step-sub">{pk_str}</div>
+        <div class="step-title">메뉴 준비</div>
+        {prepared_badge}
+        <div class="step-sub">{pk_str}</div>
         </div>
 
-        <!-- 배달중 -->
+        <!-- 배달중(진행바 영역을 넓힘: .progress-wrap {{ flex:3 }}) -->
         <div class="step progress-wrap">
-          
-          {bike_node}
-          <div class="progress-track">
+        {bike_node}
+        <div class="progress-track">
             <div class="progress-fill"></div>
-          </div>
-          <div class="progress-label"> {pk_str} 배달 시작 / {remain_text}</div>
         </div>
-
+        <div class="progress-label"> {pk_str} 배달 시작 / {remain_text}</div>
+        </div>
 
         <!-- 배달 완료 -->
         <div class="step">
-          <div class="step-title">배달 완료</div>
-          {delivered_badge}
-          <div class="step-sub">{dv_str}</div>
+        <div class="step-title">배달 완료</div>
+        {delivered_badge}
+        <div class="step-sub">{dv_str}</div>
         </div>
-      </div>
+    </div>
     </div>
     """
-    components.html(pipeline_html, height=260, scrolling=False)
+
+    components.html(pipeline_html, height=350, scrolling=False)
 
     # ===== 오버레이 트리거: 하단 진행바(세션 시계) 기준 =====
     minutes_text = str(n_min if n_min is not None else "예상")
