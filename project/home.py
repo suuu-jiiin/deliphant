@@ -356,6 +356,8 @@ with col_special:
         unsafe_allow_html=True,
     )
 
+st.markdown("---")
+
 # ========================= [BLOCK 6] 축제 및 피크 시간대 경고 =========================
 def trigger_fireworks(duration_sec: float = 2.5, height: int = 120):
     """전체 화면에 폭죽 애니메이션 (canvas-confetti)."""
@@ -625,9 +627,9 @@ with top_scope:
                 st_folium(m, width=None, height=520)
                 if "distance_m" in route and route["distance_m"] is not None:
                     km = route["distance_m"] / 1000
-                    st.caption(f"경로 길이: {km:.2f} km  |  색상 근거: Road_traffic_density = {traffic_val}")
+                    st.caption(f"경로 길이: {km:.2f} km  |  교통 상황: {traffic_val}")
                 else:
-                    st.caption(f"색상 근거: Road_traffic_density = {traffic_val}")
+                    st.caption(f"교통 상황: {traffic_val}")
 
     # ---- 중: ETA 통계 (CSV 기반)
     with mid_col:
@@ -938,7 +940,7 @@ with top_scope:
                         .mark_text(
                             align="right",
                             baseline="middle",
-                            fontSize=20,
+                            fontSize=17,
                             fontWeight="normal",
                             dx=5, 
                             color=COLOR_LABEL
