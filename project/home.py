@@ -1,7 +1,3 @@
-# app_main_local_density_route.py
-# 단일 주문 선택 → CSV Road_traffic_density 색상으로 "실제 도로 경로" 표시 (Mapbox driving, no traffic)
-# 업로드 UI 없음, 로컬 CSV 사용, 하단 파이프라인 유지
-
 # ========================= [BLOCK 1] 기본 설정 & 라이브러리 =========================
 import folium
 import time
@@ -26,7 +22,7 @@ st.set_page_config(page_title="배달 예측(메인)", layout="wide")
 # 🔝 타이틀 위 전용 슬롯
 FX_SLOT = st.container()
 
-st.title("🚚 배달 예측 대시보드")
+st.title("🍳배달 예측 대시보드")
 
 # ========================= [BLOCK 2] 전역 상수(토큰/파일/컬럼/색상) =========================
 MAPBOX_TOKEN   = ""
@@ -469,7 +465,7 @@ with top_scope:
     left_col, mid_col, right_col = st.columns([1.3, 1.0, 1.0])
     # ---- 좌: 지도 (실제 경로 + CSV 색상)
     with left_col:
-        st.subheader("지도 / 실제 도로 경로 (CSV 혼잡도 색)")
+        st.subheader("배달 경로")
         if sel is None:
             st.info("주문을 선택하세요.")
         else:
@@ -536,6 +532,7 @@ with top_scope:
             target_row = orders[orders[COL["id"]] == selected_id].iloc[0]
             
             # 클래스를 시간(분) 범위로 매핑하는 딕셔너리
+            # 클래스를 시간(분) 범위로 매핑
             time_map = {
                 1.0: "10~14분", 1.5: "15~19분", 2.0: "20~24분",
                 2.5: "25~29분", 3.0: "30~34분", 3.5: "35~39분",
@@ -545,22 +542,25 @@ with top_scope:
             pred_class = None
             if 'max_after_class_key' in target_row and pd.notna(target_row['max_after_class_key']):
                 try:
-                    # str 타입이므로 float으로 변환
-                    pred_class = float(target_row['max_after_class_key'])
+                    pred_class = float(target_row['max_after_class_key'])  # 예: 2.0, 2.5 ...
                 except (ValueError, TypeError):
-                    # 변환 실패 시 None
                     pass
-            
-            # 클래스를 실제 더할 시간(분)으로 매핑 (범위의 최소값 사용)
-            minute_map = {
-                key: int(value.split('~')[0]) for key, value in time_map.items()
+
+            # (선택) 최소값 필요하면 그대로 두세요
+            minute_map = {k: int(v.split('~')[0]) for k, v in time_map.items()}
+
+            # ▶ 끝 값(최댓값) 맵 생성: "10~14분" → 14
+            upper_bound_map = {
+                k: int(v.split('~')[1].replace('분', '')) for k, v in time_map.items()
             }
 
-            # 1-1. 예상 소요 시간 (예: "10~14분")
-            if pred_class is not None:
-                time_range_str = time_map.get(pred_class, "계산 불가")
+            # 1-1. 출력: "24분 이내" 형태
+            if pred_class is not None and pred_class in upper_bound_map:
+                upper_bound_min = upper_bound_map[pred_class]         # 예: 24
+                time_range_str = f"{upper_bound_min}분 이내"          # "24분 이내"
             else:
-                time_range_str = "정보 없음"
+                time_range_str = "정보 없음"  # 또는 "계산 불가"
+
 
             # 1-2. 예상 도착 시각 (예: "오후 10시 33분 도착 예정") 또는 에러 메시지
             arrival_text = ""
