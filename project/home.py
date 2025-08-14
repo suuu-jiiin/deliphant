@@ -25,7 +25,7 @@ st.set_page_config(page_title="배달 예측(메인)", layout="wide")
 # 🔝 타이틀 위 전용 슬롯
 FX_SLOT = st.container()
 
-st.title("🚚 Deliphant 배달 현황")
+st.title("🐘 Deliphant 배달 현황")
 
 ######### 페이지 변환 네비게이션 ########3
 qp = st.query_params
@@ -317,7 +317,7 @@ if sel is not None:
 if is_festival:
     with FX_SLOT:
         trigger_fireworks(duration_sec=5.0, height=130)
-    st.toast("축제 기간이라 배달이 늦어지고 있어요 🎉", icon="🎆")
+    st.toast("축제 기간이라 배달이 늦어지고 있어요 🥹", icon="🎆")
 else:
     # 축제가 아니면 슬롯 비우기(이전 렌더 지우기)
     FX_SLOT.empty()
@@ -334,7 +334,19 @@ else:
 peak_text_html = ""
 if is_peak:
     peak_text_html = """
-        <div style="color:#e11d48; font-weight:700; font-size:14px; margin-top:4px;">피크 시간대 입니다</div>
+        <style>
+        @keyframes flash {
+            0%, 100% { color: #e11d48; text-shadow: 0 0 6px rgba(255,0,0,0.8); }
+            50% { color: #ff4d6d; text-shadow: 0 0 16px rgba(255,0,0,1); }
+        }
+        .flash-text {
+            font-weight: 700;
+            font-size: 16px;
+            margin-top: 4px;
+            animation: flash 1s infinite;
+        }
+        </style>
+        <div class="flash-text">🚨 피크 시간대 입니다 🚨</div>
         """
 
 # ========================= [BLOCK 7] 3분할 레이아웃 =========================
@@ -769,11 +781,6 @@ with top_scope:
                     .click-card .cover-link { pointer-events: auto; }
                     </style>
                     """, unsafe_allow_html=True)
-
-                col1, col2, col3 = st.columns([1, 1, 1])
-                with col2:
-                    if st.button("상세 보기", use_container_width=True):
-                        st.switch_page("pages/prob_distribution.py")
             else:
                 st.warning("차트를 표시할 예측 확률 데이터가 없습니다.")
 
@@ -902,15 +909,6 @@ with top_scope:
                     st.altair_chart(chart_comp, use_container_width=True)
                     # 카드 닫기
                     st.markdown("</div>", unsafe_allow_html=True)
-
-                    c1, c2, c3 = st.columns([1,2,1])
-                    with c2:
-                        # ✅ key를 고유하게: 선택된 ID를 붙이면 충돌 없음
-                        if st.button("상세 보기", key=f"detail_btn_{selected_id_clean}"):
-                            # 세션/쿼리파라미터에 ID 저장 (둘 다 써도 OK)
-                            st.session_state["selected_id"] = selected_id_clean
-                            st.query_params.update({"id": selected_id_clean})
-                            st.switch_page("pages/feature_importance.py")
 
     st.markdown(f"<div id='{end_id}'></div>", unsafe_allow_html=True)
 
@@ -1253,5 +1251,5 @@ with r2[3]:
 
 
 if 'rerun_needed' in locals() and rerun_needed:
-    time.sleep(1)
+    time.sleep(3)
     st.rerun()
