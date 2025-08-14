@@ -982,12 +982,14 @@ else:
     .pipeline-container {{
         display:flex;justify-content:space-between;align-items:center;
     }}
-    .step-wrap{{display: flex;align-items: center;justify-content: space-between;gap: 80px;margin-top: 10px;margin-bottom: 10px;flex: 1;}}
+    .step-wrap{{
+    display: flex;align-items: center;justify-content: space-between;gap: 80px;margin-top: 10px;margin-bottom: 10px;flex: 1;}}
     .step{{text-align:center;flex-shrink:0}}
     .badge{{width:82px;height:82px;border-radius:50%;background:#5A754D;color:white;
            display:flex;align-items:center;justify-content:center;font-weight:800;font-size:28px;
            box-shadow:inset -6px -6px 0 rgba(0,0,0,0.15)}}
     .badge-empty{{width:82px;height:82px;border-radius:50%;border:10px solid #5A615D;background:#fff}}
+    .line{{height:10px;background:#5A615D;flex:1;position:relative}}
     .step-title{{font-size:20px;font-weight:700;margin-bottom:6px}}
     .step-sub{{color:#8B8F90;font-size:16px;min-height:22px;margin-top:8px}}
     .big-clock{{font-size:48px;color:#5A754D;font-weight:900;margin:0}}
@@ -1007,7 +1009,7 @@ else:
 
     <div class="pipeline-container">
       <div class="step">
-        <div class="step-title">현재 시각 (픽업 기준)</div>
+        <div class="step-title">현재 시각 (데이터 기준)</div>
         <div class="big-clock">{sim_now.strftime("%H:%M")}</div>
       </div>
 
@@ -1023,12 +1025,10 @@ else:
 
         <!-- 메뉴 준비 -->
         <div class="step">
-          <div class="step-title">메뉴 준비중</div>
+          <div class="step-title">메뉴 준비</div>
           {prepared_badge}
-          <div class="step-sub">{prep_str}</div>
+          <div class="step-sub">{pk_str}</div>
         </div>
-
-        <div class="line"></div>
 
         <!-- 배달중 -->
         <div class="step progress-wrap">
@@ -1040,7 +1040,6 @@ else:
           <div class="progress-label"> {pk_str} 배달 시작 / {remain_text}</div>
         </div>
 
-        <div class="line"></div>
 
         <!-- 배달 완료 -->
         <div class="step">
@@ -1062,7 +1061,7 @@ else:
     # --- 3초마다 업데이트 ---
     if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
         st.session_state["sim_now"] = sim_now + timedelta(minutes=1)
-        time.sleep(3)
+        time.sleep(1)
         st.rerun()
 
 # ========================= [BLOCK 9] 주의사항 =========================
