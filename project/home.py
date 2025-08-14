@@ -982,13 +982,12 @@ else:
     .pipeline-container {{
         display:flex;justify-content:space-between;align-items:center;
     }}
-    .step-wrap{{display:flex;align-items:center;gap:48px;margin-top:10px;margin-bottom:10px;flex:1}}
+    .step-wrap{{display: flex;align-items: center;justify-content: space-between;gap: 80px;margin-top: 10px;margin-bottom: 10px;flex: 1;}}
     .step{{text-align:center;flex-shrink:0}}
     .badge{{width:82px;height:82px;border-radius:50%;background:#5A754D;color:white;
            display:flex;align-items:center;justify-content:center;font-weight:800;font-size:28px;
            box-shadow:inset -6px -6px 0 rgba(0,0,0,0.15)}}
     .badge-empty{{width:82px;height:82px;border-radius:50%;border:10px solid #5A615D;background:#fff}}
-    .line{{height:10px;background:#5A615D;flex:1;position:relative}}
     .step-title{{font-size:20px;font-weight:700;margin-bottom:6px}}
     .step-sub{{color:#8B8F90;font-size:16px;min-height:22px;margin-top:8px}}
     .big-clock{{font-size:48px;color:#5A754D;font-weight:900;margin:0}}
