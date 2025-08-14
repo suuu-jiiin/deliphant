@@ -12,8 +12,6 @@ import numpy as np
 import streamlit as st
 from streamlit_folium import st_folium
 from datetime import datetime, timedelta
-from streamlit import runtime
-from streamlit import autorefresh as st_autorefresh  # Streamlit 1.36+ 에서 이름이 st.autorefresh
 from streamlit.components.v1 import html as components_html
 import streamlit.components.v1 as components
 import base64
@@ -862,7 +860,13 @@ else:
     </div>
     """
 
+
     components.html(pipeline_html, height=320, scrolling=False)
+
+    # ─ 자동 리프레시: 배달중 구간에서 3초마다 재실행(현실 3초 → 시뮬 1분)
+    if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
+        time.sleep(3)
+        st.rerun()
 
 # ========================= [BLOCK 9] 주의사항 =========================
 st.caption("ℹ️ 경로는 Mapbox Directions(driving)로 계산된 '현재' 기준 도로 경로이며, 선 색상은 CSV의 Road_traffic_density 값을 그대로 반영합니다(실시간 교통 미사용).")
