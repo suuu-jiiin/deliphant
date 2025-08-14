@@ -282,24 +282,26 @@ def plot_feature_bubbles_for_id(
         fp_label  = _fp(fontprop, text_fontsize, "bold")
         fp_center = _fp(fontprop, text_fontsize + 2, "bold")
 
+        pe_bold = [pe.withStroke(linewidth=1.0, foreground="#2E371D")]
+
         # --- 버블 라벨들 ---
         for i in range(1, n):
             txt = f"{labels_ko[i]}\n{probs[i]*100:.1f}%" if show_percent else labels_ko[i]
             if fp_label is not None:
                 ax.text(cx[i], cy[i], txt, ha="center", va="center",
-                        color="#111", fontproperties=fp_label, zorder=6)
+                        color="#2E371D", fontproperties=fp_label, fontweight="bold", zorder=6, path_effects=pe_bold)
             else:
                 ax.text(cx[i], cy[i], txt, ha="center", va="center",
-                        fontsize=text_fontsize, fontweight="bold", color="#111", zorder=6)
+                        fontsize=text_fontsize, fontweight="bold", color="#2E371D", zorder=6, path_effects=pe_bold)
 
         # 중앙(최대) 라벨
         txt0 = f"{labels_ko[0]}\n{probs[0]*100:.1f}%" if show_percent else labels_ko[0]
         if fp_center is not None:
             ax.text(cx[0], cy[0], txt0, ha="center", va="center",
-                    color="#111", fontproperties=fp_center, zorder=7)
+                    color="#2E371D", fontproperties=fp_center, fontweight="bold", zorder=7, path_effects=pe_bold)
         else:
             ax.text(cx[0], cy[0], txt0, ha="center", va="center",
-                    fontsize=text_fontsize+2, fontweight="bold", color="#111", zorder=7)
+                    fontsize=text_fontsize+2, fontweight="bold", color="#2E371D", zorder=7, path_effects=pe_bold)
 
         # 여백
         pad = (base_radii.max() if len(base_radii) else 1.0) 
@@ -387,7 +389,7 @@ def render_meta_chips(meta: dict, icon_dir: Path):
     multi_icon = icon_dir / "delivery" / ("multiple.png" if is_multi_delivery(multi_val) else "only.png")
 
     chips.append(("교통", meta.get("traffic_txt","NA"),
-                  icon_dir / "traffic" / f"{meta.get('traffic_key','')}.png"))
+                  icon_dir / "traffic" / "traffic.png"))
     chips.append(("날씨", meta.get("weather_txt","NA"),
                   icon_dir / "weather" / f"{meta.get('weather_key','')}.png"))
     chips.append(("거리", f"{meta.get('distance_km', float('nan')):.1f} km" if pd.notna(meta.get('distance_km')) else "NA",
@@ -396,7 +398,7 @@ def render_meta_chips(meta: dict, icon_dir: Path):
               meta.get("multi_txt", "NA"),   # 이미 '동시 배달' / '한 집 배달' 매핑되어 있으면 이게 더 보기 좋아요
               multi_icon))
     chips.append(("지역", meta.get("region_city","NA"),
-                  icon_dir / "misc" / "city.png"))
+                  icon_dir / "city" / "city.png"))
 
     parts = []
     for label, value, p in chips:
@@ -411,29 +413,40 @@ def render_meta_chips(meta: dict, icon_dir: Path):
 
     html = f"""
     <style>
-      .page-title {{
+    .page-title {{
         font-family: 'TitleFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
         font-weight: 700; font-size: 42px; line-height: 1.25;
         text-align: center; margin: 6px 0 8px 0;
-      }}
-      .chip-row {{
-        display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+    }}
+    .chip-row {{
+        display: flex; gap: 3px; flex-wrap: wrap; align-items: flex-start;
         margin: 6px 0 14px;
         justify-content: center;
-      }}
-      .chip {{
-        display: inline-flex; align-items: center; gap: 8px;
-        padding: 6px 12px; border-radius: 14px;
+    }}
+    .chip {{
+        display: flex;
+        flex-direction: column; /* 세로 배치 */
+        align-items: center;
+        padding: 10px 14px;
+        border-radius: 14px;
         background: #ffffff; border: 1px solid #c9d2b3;
-      }}
-      .chip-icon {{ width: 18px; height: 18px; }}
-      .chip-text {{
+        width: 135px; /* 각 칩의 고정 너비 */
+    }}
+    .chip-icon {{
+        width: 50px;  /* 아이콘 크기 키움 */
+        height: 50px;
+        margin-bottom: 6px;
+    }}
+    .chip-text {{
         font-family: 'BodyFont', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        font-size: 15px; color: #263018; font-weight: 500;
-      }}
+        font-size: 14px;
+        color: #263018; font-weight: 600;
+        text-align: center;
+    }}
     </style>
     <div class="chip-row">{''.join(parts)}</div>
     """
+
     st.markdown(html, unsafe_allow_html=True)
 
 # -----------------------------
