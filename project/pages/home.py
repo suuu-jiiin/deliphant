@@ -1,7 +1,3 @@
-# app_main_local_density_route.py
-# 단일 주문 선택 → CSV Road_traffic_density 색상으로 "실제 도로 경로" 표시 (Mapbox driving, no traffic)
-# 업로드 UI 없음, 로컬 CSV 사용, 하단 파이프라인 유지
-
 # ========================= [BLOCK 1] 기본 설정 & 라이브러리 =========================
 import folium
 import time
@@ -25,11 +21,22 @@ DATA_DIR   = ROOT / "data"
 ASSETS_DIR = ROOT / "assets"                   
 from utils.paths import LOCAL_CSV_PATH
 
-st.set_page_config(page_title="🐘 Deliphant: 설명가능한AI 배달예측", layout="wide")
+st.set_page_config(page_title="🐘 Deliphant : 설명가능한 AI 배달예측", layout="wide")
 # 🔝 타이틀 위 전용 슬롯
 FX_SLOT = st.container()
 
-st.title("🐘 Deliphant: 설명가능한AI 배달예측")
+st.markdown("""
+<style>
+.custom-title {
+    font-size: 35px; /* 원하는 크기 */
+    font-weight: 700;
+    color: #000000;
+}
+</style>
+<div class="custom-title">🐘 Deliphant : 설명가능한 AI 배달예측</div>
+""", unsafe_allow_html=True)
+st.markdown("---")
+
 
 ######### 페이지 변환 네비게이션 ########3
 qp = st.query_params
@@ -504,9 +511,15 @@ if sel is not None and "Time_real" in sel and pd.notna(sel["Time_real"]):
 elif not np.isnan(total_min):
     n_min = int(round(total_min))
 
-####### 오버레이 함수
-def show_top_overlay_full(minutes_text: str, ele_data_url: str = "", auto_close_ms: int | None = None):
+####### 오버레이 함수 (subtitle 지원하도록 확장)
+def show_top_overlay_full(minutes_text: int | str, ele_data_url: str = "", auto_close_ms: int | None = None,
+                          subtitle_text: str = ""):
     """화면 전체를 덮는 오버레이 + 중앙 카드 (클릭/ESC로 닫힘)."""
+    # 줄바꿈 처리
+    subtitle_html = ""
+    if subtitle_text:
+        subtitle_html = f"<div style='font-size:16px; opacity:.95; font-weight:700;'>{str(subtitle_text).replace('\\n','<br>')}</div>"
+
     card_html = f"""
     <div style="
       background: rgba(0,0,0,0.65);
@@ -514,11 +527,12 @@ def show_top_overlay_full(minutes_text: str, ele_data_url: str = "", auto_close_
       border-radius: 28px;
       padding: 28px 36px;
       box-shadow: 0 20px 60px rgba(0,0,0,0.35);
-      display: flex; flex-direction: column; align-items: center; gap: 14px;
+      display: flex; flex-direction: column; align-items: center; gap: 12px;
       min-width: 520px; max-width: 86%;
       color: #fff; text-align: center; font-weight: 800;">
       {f"<img src='{ele_data_url}' alt='elephant' style='width:180px;height:auto;' />" if ele_data_url else ""}
-      <div style="font-size:20px; font-weight:700;">{minutes_text}분 만에 배달이 완료되었어요 <span style="font-size:22px">☺️</span></div>
+      <div style="font-size:20px; font-weight:700;">{minutes_text}분 만에 배달이 완료되었어요! <span style="font-size:22px">☺️</span></div>
+      {subtitle_html}
       <div style="font-size:13px; opacity:.85; font-weight:600;">(화면을 클릭하면 닫혀요)</div>
     </div>
     """
@@ -540,8 +554,8 @@ def show_top_overlay_full(minutes_text: str, ele_data_url: str = "", auto_close_
           left: "0px",
           top: "0px",
           width: "100vw",
-          height: "100vh",                // ★ 화면 전체 덮기
-          background: "rgba(0,0,0,0.60)", // ★ 반투명 검정 전면
+          height: "100vh",
+          background: "rgba(0,0,0,0.60)",
           zIndex: "999999",
           display: "flex",
           alignItems: "center",
@@ -658,9 +672,6 @@ with top_scope:
                 except (ValueError, TypeError):
                     pass
 
-            # (선택) 최소값 필요하면 그대로 두세요
-            minute_map = {k: int(v.split('~')[0]) for k, v in time_map.items()}
-
             # ▶ 끝 값(최댓값) 맵 생성: "10~14분" → 14
             upper_bound_map = {
                 k: int(v.split('~')[1].replace('분', '')) for k, v in time_map.items()
@@ -668,8 +679,8 @@ with top_scope:
 
             # 1-1. 출력: "24분 이내" 형태
             if pred_class is not None and pred_class in upper_bound_map:
-                upper_bound_min = upper_bound_map[pred_class]         # 예: 24
-                time_range_str = f"{upper_bound_min}분 이내"          # "24분 이내"
+                upper_bound_min = upper_bound_map[pred_class] + 1        # 예: 25
+                time_range_str = f"{upper_bound_min}분 이내"          # "25분 이내"
             else:
                 time_range_str = "정보 없음"  # 또는 "계산 불가"
 
@@ -680,7 +691,7 @@ with top_scope:
                 pickup_time_dt = parse_datetime(target_row.get(COL["date"]), target_row.get(COL["pickup_time"]))
 
                 if pickup_time_dt:
-                    minutes_to_add = minute_map.get(pred_class, 0)
+                    minutes_to_add = upper_bound_map[pred_class] + 1
                     estimated_arrival_time = pickup_time_dt + timedelta(minutes=minutes_to_add)
                     arrival_text = f"{fmt_kor(estimated_arrival_time)} 전 도착 예정"
                 else:
@@ -697,7 +708,7 @@ with top_scope:
                 third_line_html = f"<h5 style='text-align: left; margin-top: -5px;'>{arrival_text}</h5>"
 
             eta_inner_html = f"""
-                <div style="line-height: 1.0; padding: 12px 8px;">
+                <div style="line-height: 1.0; padding: 8px 8px 8px 14px;">
                     <h3 style='text-align: left; font-weight: bold; margin-bottom: -20px;'>배달 예상 소요 시간</h3>
                     <h1 style='text-align: left; color: #1E90FF; margin-top: -20px;'>{time_range_str}</h1>
                     {"<h4 style='text-align:left; color:#FF4B4B; margin-top:5px;'>" + error_text + "</h4>" if error_text
@@ -977,18 +988,15 @@ with top_scope:
                     
                     st.session_state['selected_id'] = selected_id
                     html_code = f"""
-                        <div class="click-card" style="background:#ffffff; padding: 8px; border-radius:16px;">
-                            <a class="cover-link" href="?to=fi&id={selected_id_clean}" aria-label="변수 중요도 상세보기"></a>
-                            <div style="line-height: 1.2;">
-                                <h3 style='text-align: left; font-weight: bold; margin-bottom: -8px;'>
-                                    변수 중요도
-                                </h3>
-                                <p style='text-align: left; color: #555; font-size:20px; margin-top: 0;'>
-                                    예상시간에 영향을 끼치고 있는 변수들이에요.
-                                </p>
-                            </div>
+                    <div class="click-card" style="background:#ffffff; padding: 8px 8px 8px 20px; border-radius:16px;">
+                        <a class="cover-link" href="?to=fi&id={selected_id_clean}" aria-label="변수 중요도 상세보기"></a>
+                        <div style="line-height: 1.4;">
+                            <h3 style='text-align: left; font-weight: bold; margin-bottom: 6px;'>변수 중요도</h3>
+                            <p style='text-align: left; color: #555; font-size:18px; margin-top: 0;'>예상시간에 영향을 끼치고 있는 변수들이에요.</p>
                         </div>
+                    </div>
                     """
+
                     st.markdown(html_code, unsafe_allow_html=True)
                     
                     st.write("")
@@ -1058,15 +1066,21 @@ else:
     prepared_badge  = badge_html(prepared_done)
     delivered_badge = badge_html(delivered_done)
 
+    # est_delivered_dt 계산
+    est_delivered_dt = None
+    if pickup_dt and 'upper_bound_min' in locals() and upper_bound_min is not None:
+        est_delivered_dt = pickup_dt + timedelta(minutes=upper_bound_min)
+
     eta_remain_min = None
-    if pickup_dt and delivered_dt and delivered_dt > pickup_dt:
-        total_sec   = (delivered_dt - pickup_dt).total_seconds()
+    if pickup_dt and est_delivered_dt and est_delivered_dt > pickup_dt:
+        total_sec   = (est_delivered_dt - pickup_dt).total_seconds()
         elapsed_sec = (sim_now - pickup_dt).total_seconds()
         progress_pct = max(0.0, min(elapsed_sec / total_sec, 1.0))
         if 0 <= progress_pct < 1:
             eta_remain_min = max(0, int(round((1 - progress_pct) * total_sec / 60)))
+
     remain_text = (
-        f"남은 시간 약 {eta_remain_min}분" if eta_remain_min is not None
+        f"남은 예상 시간 {eta_remain_min}분" if eta_remain_min is not None
         else ("완료" if delivered_done else ("곧 시작" if not prepared_done else "-"))
     )
 
@@ -1166,17 +1180,48 @@ else:
 
     components.html(pipeline_html, height=350, scrolling=False)
 
-    # ===== 오버레이 트리거: 하단 진행바(세션 시계) 기준 =====
-    minutes_text = str(n_min if n_min is not None else "예상")
-    if delivered_done and (st.session_state.get("done_banner_for") != selected_id_clean):
-        st.session_state["done_banner_for"] = selected_id_clean
-        show_top_overlay_full(minutes_text="25", ele_data_url=ele_src)
+    ############### 배달 완료 오버레이 (트리거/문구 생성만 수정)
+# ✅ 실제 배달 완료까지 걸린 시간(분) = Time_real (없으면 fallback)
+if "Time_real" in sel and pd.notna(sel["Time_real"]):
+    deliver_only_min = float(sel["Time_real"])
+else:
+    deliver_only_min = (max(0, total_min - prep_min)
+                        if (not np.isnan(total_min) and not np.isnan(prep_min))
+                        else None)
 
-    # --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
-    rerun_needed = False
-    if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
-        st.session_state["sim_now"] = sim_now + timedelta(minutes=1)
-        rerun_needed = True
+# 숫자 값과 텍스트 동시 준비
+minutes_val = int(round(deliver_only_min)) if deliver_only_min is not None else None
+minutes_text = str(minutes_val) if minutes_val is not None else "예상"
+
+# ▶ upper_bound_min 과 비교해서 예정 대비 문구 만들기
+subtitle = ""
+if (minutes_val is not None) and ('upper_bound_min' in locals()) and (upper_bound_min is not None):
+    try:
+        extra_min = int(upper_bound_min) - int(minutes_val)  # (+) 일찍 / 0 정시 / (-) 늦게
+        if extra_min > 0:
+            subtitle = f"예상보다 {extra_min}분 일찍 도착했어요."
+        elif extra_min == 0:
+            subtitle = "예정 시간에 정확히 도착했어요."
+        else:
+            subtitle = f"예상보다 {abs(extra_min)}분 늦게 도착했어요."
+    except Exception:
+        # upper_bound_min이 숫자가 아니거나 minutes_val 변환 실패 시 안전하게 스킵
+        subtitle = ""
+
+# 완료 시 1회 오버레이
+if delivered_done and (st.session_state.get("done_banner_for") != selected_id_clean):
+    st.session_state["done_banner_for"] = selected_id_clean
+    show_top_overlay_full(
+        minutes_text=minutes_text if isinstance(minutes_text, (int, str)) else "예상",
+        ele_data_url=ele_src,
+        subtitle_text=subtitle
+    )
+
+# --- 3초마다 업데이트 (렌더 끝난 뒤 실행되도록 플래그만 세팅) ---
+rerun_needed = False
+if (pickup_dt and delivered_dt) and (sim_now < delivered_dt):
+    st.session_state["sim_now"] = sim_now + timedelta(minutes=1)
+    rerun_needed = True
 
 # ========================= [BLOCK 9] 주의사항 =========================
 st.caption("ℹ️ 경로는 Mapbox Directions(driving)로 계산된 '현재' 기준 도로 경로이며, 선 색상은 과거 도로 교통상황을 그대로 반영합니다.")
