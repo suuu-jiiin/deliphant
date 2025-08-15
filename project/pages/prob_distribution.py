@@ -32,7 +32,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 사용 예시
-st.markdown(f"<div class='page-title center'>⭐️ 배달 ID ({id_value})의 소요시간 확률분포도 ⭐️</div>", unsafe_allow_html=True)
+st.markdown(f"<div class='page-title center'>⭐️ 배달ID({id_value})의 소요시간대별 확률 ⭐️</div>", unsafe_allow_html=True)
 st.write("")
 
 # --- 데이터 로드 및 준비 ---
