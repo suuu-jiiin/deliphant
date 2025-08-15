@@ -76,8 +76,8 @@ icon_base = ROOT / "assets" / "icons"
 def map_weather(v):
     s = str(v).strip().lower()
     m = {
-        "sunny":"맑음", "cloudy":"흐림", "fog":"안개", "sandstorms":"황사",
-        "windy":"바람", "stormy":"폭풍"
+        "sunny":"맑음", "cloudy":"비", "fog":"안개", "sandstorms":"모래폭풍",
+        "windy":"강풍", "stormy":"폭우"
     }
     return m.get(s, str(v))
 
@@ -466,21 +466,91 @@ if not selected_id:
 id_value = clean_id(selected_id)
 
 st.set_page_config(page_title="Deliphant: 변수중요도 상세" , layout="centered")
-st.markdown(f"<div class='page-title'>⭐️ 배달 ID ({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
+# 강제 narrow 스타일 (wide 모드에서도 적용됨)
+st.markdown("""
+<style>
+/* 전체 앱 폭 제한 */
+[data-testid="stAppViewContainer"] {
+    max-width: 800px;  /* 원하는 폭(px) */
+    margin: auto;      /* 가운데 정렬 */
+}
+
+/* 헤더 폭도 동일하게 맞춤 */
+[data-testid="stHeader"] {
+    max-width: 800px;
+    margin: auto;
+}
+
+/* Main block도 가운데 고정 */
+.main {
+    max-width: 800px;
+    margin-left: auto;
+    margin-right: auto;
+}
+</style>
+""", unsafe_allow_html=True)
+
+st.markdown(f"<div class='page-title'>⭐️ 배달ID({id_value})의 변수 중요도 ⭐️</div>", unsafe_allow_html=True)
+st.write("")
 meta = extract_meta(meta_df, id_value)
-render_meta_chips(meta, icon_base)
+render_meta_chips(meta, icon_base) 
+# 강제 오버라이드 CSS
+st.markdown("""
+<style>
+/* 더 높은 specificity + !important */
+[data-testid="stAppViewContainer"] .page-title {
+  font-size: 35px !important;
+  margin: 4px 0 6px 0 !important;
+}
+
+/* 칩 행 */
+[data-testid="stAppViewContainer"] .chip-row {
+  gap: 3px !important;
+  margin: 4px 0 10px !important;
+}
+
+/* 칩 박스 */
+[data-testid="stAppViewContainer"] .chip {
+  width: 110px !important;
+  height: 80px !important; 
+  padding: 6px 8px !important;
+  border-radius: 10px !important;
+  border: 1px solid #c9d2b3 !important;
+
+  /* 정사각형 내부 중앙 정렬 */
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* 아이콘 */
+[data-testid="stAppViewContainer"] .chip-icon {
+  width: 34px !important;
+  height: 34px !important;
+  margin-bottom: 4px !important;
+}
+
+/* 텍스트 */
+[data-testid="stAppViewContainer"] .chip-text {
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  text-align: center !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # 버블 플롯
 fig, _ = plot_feature_bubbles_for_id(
     df, id_value,
     fontprop=myfont,
-    figsize=(9, 9),  # <<<--- 1. 전체 그림(Figure) 크기 줄이기
-    animate=True, frames=5, frame_delay=0.012,
+    figsize=(5, 5),  
+    animate=True, frames=20, frame_delay=0.05,
     ring_scale=1.08, 
-    radius_scale=5.0, # <<<--- 2. 버블의 상대적 크기 약간 줄이기
+    radius_scale=5.0,
     gap_ratio=-0.05, gap_abs=0.0,
     area_gamma=1.6, 
-    text_fontsize=13, # <<<--- 3. 폰트 크기도 균형에 맞게 조절
+    text_fontsize=10, 
     st_placeholder=st.empty()
 )
 
